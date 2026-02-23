@@ -980,11 +980,6 @@ const sidebars = {
         },
         { type: 'doc', id: 'workflows/step', label: 'Step Class' },
         { type: 'doc', id: 'workflows/workflow', label: 'Workflow Class' },
-        {
-          type: 'doc',
-          id: 'workflows/createInngestAgent',
-          label: 'createInngestAgent()',
-        },
       ],
     },
   ],
