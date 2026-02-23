@@ -1,8 +1,8 @@
 import type { Mastra } from '@mastra/core';
 import type { SystemMessage } from '@mastra/core/llm';
-import type { PublicSchema } from '@mastra/core/schema';
-import { toStandardSchema } from '@mastra/core/schema';
 import type { StepWithComponent, Workflow, WorkflowInfo } from '@mastra/core/workflows';
+import { toStandardSchema } from '@mastra/schema-compat/schema';
+import type { PublicSchema } from '@mastra/schema-compat/schema';
 // JSONSchema7 type - compatible with json-schema types
 type JSONSchema7 = Record<string, unknown>;
 import { stringify } from 'superjson';

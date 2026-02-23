@@ -2286,6 +2286,9 @@ importers:
       '@mastra/memory':
         specifier: workspace:*
         version: link:../memory
+      '@mastra/schema-compat':
+        specifier: workspace:*
+        version: link:../schema-compat
       ignore:
         specifier: ^7.0.5
         version: 7.0.5
@@ -3988,6 +3991,9 @@ importers:
 
   packages/server:
     dependencies:
+      '@mastra/schema-compat':
+        specifier: workspace:*
+        version: link:../schema-compat
       hono:
         specifier: ^4.11.9
         version: 4.11.9

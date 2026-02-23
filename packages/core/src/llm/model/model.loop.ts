@@ -1,16 +1,5 @@
 import { stepCountIs } from '@internal/ai-sdk-v5';
-import type { Schema, ModelMessage, ToolSet } from '@internal/ai-sdk-v5';
-import {
-  AnthropicSchemaCompatLayer,
-  applyCompatLayer,
-  DeepSeekSchemaCompatLayer,
-  GoogleSchemaCompatLayer,
-  MetaSchemaCompatLayer,
-  OpenAIReasoningSchemaCompatLayer,
-  OpenAISchemaCompatLayer,
-} from '@mastra/schema-compat';
-import type { JSONSchema7 } from 'json-schema';
-import type { ZodSchema } from 'zod/v3';
+import type { ModelMessage, ToolSet } from '@internal/ai-sdk-v5';
 import type { MastraPrimitives } from '../../action';
 import { MastraBase } from '../../base';
 import { MastraError, ErrorDomain, ErrorCategory } from '../../error';
@@ -18,7 +7,6 @@ import { loop } from '../../loop';
 import type { LoopOptions } from '../../loop/types';
 import type { Mastra } from '../../mastra';
 import { SpanType } from '../../observability';
-import type { StandardSchemaWithJSON } from '../../schema/schema';
 import type { MastraModelOutput } from '../../stream/base/output';
 import type { ModelManagerModelConfig } from '../../stream/types';
 import { delay } from '../../utils';
@@ -87,39 +75,6 @@ export class MastraLLMVNext extends MastraBase {
 
   getModel() {
     return this.#firstModel.model;
-  }
-
-  private _applySchemaCompat(schema: StandardSchemaWithJSON | undefined): Schema | undefined {
-    // Guard against undefined schemas - return undefined early
-    if (!schema) {
-      return undefined;
-    }
-
-    const model = this.#firstModel.model;
-
-    const schemaCompatLayers = [];
-
-    if (model) {
-      const modelInfo = {
-        modelId: model.modelId,
-        supportsStructuredOutputs: true,
-        provider: model.provider,
-      };
-      schemaCompatLayers.push(
-        new OpenAIReasoningSchemaCompatLayer(modelInfo),
-        new OpenAISchemaCompatLayer(modelInfo),
-        new GoogleSchemaCompatLayer(modelInfo),
-        new AnthropicSchemaCompatLayer(modelInfo),
-        new DeepSeekSchemaCompatLayer(modelInfo),
-        new MetaSchemaCompatLayer(modelInfo),
-      );
-    }
-
-    return applyCompatLayer({
-      schema: schema as any,
-      compatLayers: schemaCompatLayers,
-      mode: 'aiSdkSchema',
-    }) as unknown as Schema<ZodSchema | JSONSchema7>;
   }
 
   convertToMessages(messages: string | string[] | ModelMessage[]): ModelMessage[] {

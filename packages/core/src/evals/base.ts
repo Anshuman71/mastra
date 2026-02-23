@@ -59,25 +59,13 @@ interface ScorerRun<TInput = any, TOutput = any> {
   tracingContext?: TracingContext;
 }
 
-/**
- * Helper type for schema output type inference.
- * This is a minimal interface that captures the output type from various schema types
- * without importing the full schema types (which would cause OOM during type checking).
- */
-export type InferSchemaOutput<TSchema> = TSchema extends { '~standard': { types: { output: infer O } } }
-  ? O
-  : TSchema extends z.ZodType<infer O>
-    ? O
-    : unknown;
-
 // Prompt object definition with conditional typing
 interface PromptObject<
-  _TOutput,
+  TOutput,
   TAccumulated extends Record<string, any>,
   TStepName extends string = string,
   TInput = any,
   TRunOutput = any,
-  TSchema = unknown,
 > {
   description: string;
   /**
@@ -87,7 +75,7 @@ interface PromptObject<
    *
    * The TOutput generic is inferred from this schema's output type.
    */
-  outputSchema: TSchema;
+  outputSchema: PublicSchema<TOutput>;
   judge?: {
     model: MastraModelConfig;
     instructions: string;
@@ -188,13 +176,13 @@ interface GenerateReasonPromptObject<TAccumulated extends Record<string, any>, T
 // Step definition types that support both function and prompt object steps
 type PreprocessStepDef<TAccumulated extends Record<string, any>, TStepOutput, TInput, TRunOutput> =
   | FunctionStep<TAccumulated, TInput, TRunOutput, TStepOutput>
-  | (PromptObject<TStepOutput, TAccumulated, 'preprocess', TInput, TRunOutput, unknown> & {
+  | (PromptObject<TStepOutput, TAccumulated, 'preprocess', TInput, TRunOutput> & {
       outputSchema: PublicSchema<TStepOutput>;
     });
 
 type AnalyzeStepDef<TAccumulated extends Record<string, any>, TStepOutput, TInput, TRunOutput> =
   | FunctionStep<TAccumulated, TInput, TRunOutput, TStepOutput>
-  | (PromptObject<TStepOutput, TAccumulated, 'analyze', TInput, TRunOutput, unknown> & {
+  | (PromptObject<TStepOutput, TAccumulated, 'analyze', TInput, TRunOutput> & {
       outputSchema: PublicSchema<TStepOutput>;
     });
 
