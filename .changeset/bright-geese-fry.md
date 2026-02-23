@@ -1,5 +1,5 @@
 ---
-'@mastra/core': minor
+'@mastra/core': patch
 '@mastra/playground-ui': patch
 '@mastra/client-js': patch
 '@mastra/server': patch
