@@ -1,9 +1,9 @@
-import type { z } from 'zod';
-
 import type { Agent } from '../agent';
 import type { ToolsInput, ToolsetsInput } from '../agent/types';
 import type { StorageThreadType } from '../memory/types';
 import { RequestContext } from '../request-context';
+import { toStandardSchema } from '../schema';
+import type { InferPublicSchema, StandardSchemaWithJSON } from '../schema';
 import type { MemoryStorage } from '../storage/domains/memory/base';
 import { Workspace } from '../workspace/workspace';
 import type { WorkspaceConfig } from '../workspace/workspace';
@@ -54,11 +54,12 @@ import type {
  * await harness.sendMessage({ content: "Hello!" })
  * ```
  */
-export class Harness<TState extends HarnessStateSchema = HarnessStateSchema> {
+export class Harness<TState extends HarnessStateSchema<any> = HarnessStateSchema<{}>> {
   readonly id: string;
 
   private config: HarnessConfig<TState>;
-  private state: z.infer<TState>;
+  private stateSchema: StandardSchemaWithJSON | undefined;
+  private state: InferPublicSchema<TState>;
   private currentModeId: string;
   private currentThreadId: string | null = null;
   private resourceId: string;
@@ -94,11 +95,14 @@ export class Harness<TState extends HarnessStateSchema = HarnessStateSchema> {
     this.config = config;
     this.resourceId = config.resourceId ?? config.id;
 
+    // Convert PublicSchema to StandardSchemaWithJSON at the boundary
+    this.stateSchema = config.stateSchema ? toStandardSchema(config.stateSchema) : undefined;
+
     // Initialize state from schema defaults + initial state
     this.state = {
       ...this.getSchemaDefaults(),
       ...config.initialState,
-    } as z.infer<TState>;
+    } as InferPublicSchema<TState>;
 
     // Find default mode
     const defaultMode = config.modes.find(m => m.default) ?? config.modes[0];
@@ -117,7 +121,9 @@ export class Harness<TState extends HarnessStateSchema = HarnessStateSchema> {
     // Seed model from mode default if not set
     const currentModel = (this.state as any).currentModelId;
     if (!currentModel && defaultMode.defaultModelId) {
-      void this.setState({ currentModelId: defaultMode.defaultModelId } as Partial<z.infer<TState>>);
+      void this.setState({ currentModelId: defaultMode.defaultModelId } as unknown as Partial<
+        InferPublicSchema<TState>
+      >);
     }
   }
 
@@ -215,7 +221,7 @@ export class Harness<TState extends HarnessStateSchema = HarnessStateSchema> {
   /**
    * Get current harness state (read-only snapshot).
    */
-  getState(): Readonly<z.infer<TState>> {
+  getState(): Readonly<InferPublicSchema<TState>> {
     return { ...this.state };
   }
 
@@ -223,41 +229,46 @@ export class Harness<TState extends HarnessStateSchema = HarnessStateSchema> {
    * Update harness state. Validates against schema if provided.
    * Emits state_changed event.
    */
-  async setState(updates: Partial<z.infer<TState>>): Promise<void> {
+  async setState(updates: Partial<InferPublicSchema<TState>>): Promise<void> {
     const changedKeys = Object.keys(updates);
     const newState = { ...this.state, ...updates };
 
-    if (this.config.stateSchema) {
-      const result = this.config.stateSchema.safeParse(newState);
-      if (!result.success) {
-        throw new Error(`Invalid state update: ${result.error.message}`);
+    if (this.stateSchema) {
+      const result = await this.stateSchema['~standard'].validate(newState);
+      if (result.issues) {
+        const messages = result.issues.map(i => i.message).join('; ');
+        throw new Error(`Invalid state update: ${messages}`);
       }
-      this.state = result.data as z.infer<TState>;
+      this.state = result.value as InferPublicSchema<TState>;
     } else {
-      this.state = newState as z.infer<TState>;
+      this.state = newState as InferPublicSchema<TState>;
     }
 
     this.emit({ type: 'state_changed', state: this.state, changedKeys });
   }
 
-  private getSchemaDefaults(): Partial<z.infer<TState>> {
-    if (!this.config.stateSchema) return {};
+  private getSchemaDefaults(): Partial<InferPublicSchema<TState>> {
+    if (!this.stateSchema) return {};
 
-    const shape = this.config.stateSchema.shape;
     const defaults: Record<string, unknown> = {};
 
-    for (const [key, field] of Object.entries(shape)) {
-      try {
-        const result = (field as any).safeParse(undefined);
-        if (result.success && result.data !== undefined) {
-          defaults[key] = result.data;
+    try {
+      // Extract defaults from the JSON Schema representation
+      const jsonSchema = this.stateSchema['~standard'].jsonSchema.output({ target: 'draft-07' }) as {
+        properties?: Record<string, { default?: unknown }>;
+      };
+      if (jsonSchema?.properties) {
+        for (const [key, prop] of Object.entries(jsonSchema.properties)) {
+          if (prop.default !== undefined) {
+            defaults[key] = prop.default;
+          }
         }
-      } catch {
-        // field has no default or doesn't support safeParse — skip
       }
+    } catch {
+      // Schema doesn't support JSON Schema extraction — skip defaults
     }
 
-    return defaults as Partial<z.infer<TState>>;
+    return defaults as Partial<InferPublicSchema<TState>>;
   }
 
   // ===========================================================================
@@ -306,7 +317,7 @@ export class Harness<TState extends HarnessStateSchema = HarnessStateSchema> {
     // Load the incoming mode's model
     const modeModelId = await this.loadModeModelId(modeId);
     if (modeModelId) {
-      void this.setState({ currentModelId: modeModelId } as Partial<z.infer<TState>>);
+      void this.setState({ currentModelId: modeModelId } as unknown as Partial<InferPublicSchema<TState>>);
       this.emit({ type: 'model_changed', modelId: modeModelId } as HarnessEvent);
     }
 
@@ -379,7 +390,7 @@ export class Harness<TState extends HarnessStateSchema = HarnessStateSchema> {
     const targetModeId = modeId ?? this.currentModeId;
 
     if (targetModeId === this.currentModeId) {
-      void this.setState({ currentModelId: modelId } as Partial<z.infer<TState>>);
+      void this.setState({ currentModelId: modelId } as unknown as Partial<InferPublicSchema<TState>>);
     }
 
     if (scope === 'thread') {
@@ -575,7 +586,7 @@ export class Harness<TState extends HarnessStateSchema = HarnessStateSchema> {
     this.currentThreadId = thread.id;
 
     if (modelId && !currentStateModel) {
-      void this.setState({ currentModelId: modelId } as Partial<z.infer<TState>>);
+      void this.setState({ currentModelId: modelId } as unknown as Partial<InferPublicSchema<TState>>);
     }
 
     this.tokenUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
@@ -735,7 +746,7 @@ export class Harness<TState extends HarnessStateSchema = HarnessStateSchema> {
       }
 
       if (Object.keys(updates).length > 0) {
-        void this.setState(updates as Partial<z.infer<TState>>);
+        void this.setState(updates as unknown as Partial<InferPublicSchema<TState>>);
       }
     } catch {
       this.tokenUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
@@ -912,7 +923,7 @@ export class Harness<TState extends HarnessStateSchema = HarnessStateSchema> {
    * Switch the Observer model.
    */
   async switchObserverModel({ modelId }: { modelId: string }): Promise<void> {
-    void this.setState({ observerModelId: modelId } as Partial<z.infer<TState>>);
+    void this.setState({ observerModelId: modelId } as unknown as Partial<InferPublicSchema<TState>>);
     await this.setThreadSetting({ key: 'observerModelId', value: modelId });
     this.emit({ type: 'om_model_changed', role: 'observer', modelId } as HarnessEvent);
   }
@@ -921,7 +932,7 @@ export class Harness<TState extends HarnessStateSchema = HarnessStateSchema> {
    * Switch the Reflector model.
    */
   async switchReflectorModel({ modelId }: { modelId: string }): Promise<void> {
-    void this.setState({ reflectorModelId: modelId } as Partial<z.infer<TState>>);
+    void this.setState({ reflectorModelId: modelId } as unknown as Partial<InferPublicSchema<TState>>);
     await this.setThreadSetting({ key: 'reflectorModelId', value: modelId });
     this.emit({ type: 'om_model_changed', role: 'reflector', modelId } as HarnessEvent);
   }
@@ -942,7 +953,7 @@ export class Harness<TState extends HarnessStateSchema = HarnessStateSchema> {
 
   async setSubagentModelId({ modelId, agentType }: { modelId: string; agentType?: string }): Promise<void> {
     const key = agentType ? `subagentModelId_${agentType}` : 'subagentModelId';
-    void this.setState({ [key]: modelId } as Partial<z.infer<TState>>);
+    void this.setState({ [key]: modelId } as unknown as Partial<InferPublicSchema<TState>>);
     await this.setThreadSetting({ key, value: modelId });
     this.emit({ type: 'subagent_model_changed', modelId, scope: 'thread', agentType } as HarnessEvent);
   }
@@ -973,13 +984,13 @@ export class Harness<TState extends HarnessStateSchema = HarnessStateSchema> {
   setPermissionForCategory({ category, policy }: { category: ToolCategory; policy: PermissionPolicy }): void {
     const rules = this.getPermissionRules();
     rules.categories[category] = policy;
-    void this.setState({ permissionRules: rules } as Partial<z.infer<TState>>);
+    void this.setState({ permissionRules: rules } as unknown as Partial<InferPublicSchema<TState>>);
   }
 
   setPermissionForTool({ toolName, policy }: { toolName: string; policy: PermissionPolicy }): void {
     const rules = this.getPermissionRules();
     rules.tools[toolName] = policy;
-    void this.setState({ permissionRules: rules } as Partial<z.infer<TState>>);
+    void this.setState({ permissionRules: rules } as unknown as Partial<InferPublicSchema<TState>>);
   }
 
   getPermissionRules(): PermissionRules {
@@ -1897,10 +1908,11 @@ export class Harness<TState extends HarnessStateSchema = HarnessStateSchema> {
    * Tools can access harness state via requestContext.get('harness').
    */
   private async buildRequestContext(): Promise<RequestContext> {
-    const harnessContext: HarnessRequestContext<TState> = {
+    type StateData = InferPublicSchema<TState>;
+    const harnessContext: HarnessRequestContext<StateData> = {
       harnessId: this.id,
-      state: this.getState(),
-      getState: () => this.getState(),
+      state: this.getState() as StateData,
+      getState: () => this.getState() as StateData,
       setState: updates => this.setState(updates),
       threadId: this.currentThreadId,
       resourceId: this.resourceId,
