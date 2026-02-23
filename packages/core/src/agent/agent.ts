@@ -2858,9 +2858,15 @@ export class Agent<
                     };
                     const supervisorMemory = await this.getMemory({ requestContext });
                     if (supervisorMemory) {
-                      await supervisorMemory.saveMessages({
-                        messages: [feedbackMessage],
-                      });
+                      try {
+                        await supervisorMemory.saveMessages({
+                          messages: [feedbackMessage],
+                        });
+                      } catch (memoryError) {
+                        this.logger.error(
+                          `[Agent:${this.name}] - Failed to save feedback to supervisor memory: ${memoryError}`,
+                        );
+                      }
                     }
                   }
                 } catch (hookError) {
@@ -2897,7 +2903,44 @@ export class Agent<
                     },
                   };
 
-                  await delegation.onDelegationComplete(delegationCompleteContext);
+                  const completeResult = await delegation.onDelegationComplete(delegationCompleteContext);
+
+                  if (bailed) {
+                    requestContext.set('__mastra_delegationBailed', true);
+                  }
+
+                  if (completeResult?.feedback) {
+                    const feedbackMessage: MastraDBMessage = {
+                      id: this.#mastra?.generateId() || randomUUID(),
+                      role: 'assistant',
+                      type: 'text',
+                      createdAt: new Date(),
+                      content: {
+                        format: 2,
+                        parts: [{ type: 'text', text: completeResult.feedback }],
+                        metadata: {
+                          mode: 'stream',
+                          completionResult: {
+                            suppressFeedback: true,
+                          },
+                        },
+                      },
+                      threadId,
+                      resourceId,
+                    };
+                    const supervisorMemory = await this.getMemory({ requestContext });
+                    if (supervisorMemory) {
+                      try {
+                        await supervisorMemory.saveMessages({
+                          messages: [feedbackMessage],
+                        });
+                      } catch (memoryError) {
+                        this.logger.error(
+                          `[Agent:${this.name}] - Failed to save feedback to supervisor memory: ${memoryError}`,
+                        );
+                      }
+                    }
+                  }
                 } catch (hookError) {
                   this.logger.error(`[Agent:${this.name}] - onDelegationComplete hook error on failure: ${hookError}`);
                 }
@@ -2908,10 +2951,6 @@ export class Agent<
               // sees the correct memory context
               if (savedMastraMemory !== undefined) {
                 requestContext.set('MastraMemory', savedMastraMemory);
-              }
-
-              if (bailed) {
-                requestContext.set('__mastra_delegationBailed', true);
               }
 
               const mastraError = new MastraError(
