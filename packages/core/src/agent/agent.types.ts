@@ -168,8 +168,6 @@ export interface DelegationCompleteContext {
 export interface DelegationCompleteResult {
   /** Optional feedback to add to the conversation */
   feedback?: string;
-  /** Whether to stop further processing after this delegation */
-  stopProcessing?: boolean;
 }
 
 /**
@@ -268,13 +266,6 @@ export interface DelegationConfig {
    * Can provide feedback or stop processing.
    */
   onDelegationComplete?: OnDelegationCompleteHandler;
-
-  /**
-   * Strategy for handling bail() during concurrent tool execution.
-   * - 'first': Stop on first bail() call (default)
-   * - 'last': Only bail if all concurrent calls want to bail
-   */
-  bailStrategy?: 'first' | 'last';
 
   /**
    * Callback that controls which parent messages are passed to each sub-agent as conversation
@@ -594,7 +585,6 @@ export type AgentExecutionOptionsBase<OUTPUT> = {
    *         bail();
    *       }
    *     },
-   *     bailStrategy: 'first',
    *   },
    * });
    * ```

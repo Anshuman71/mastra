@@ -492,7 +492,6 @@ describe('Supervisor Pattern Integration Tests', () => {
           return { continue: true };
         },
         delegation: {
-          bailStrategy: 'first',
           onDelegationComplete: (ctx: DelegationCompleteContext) => {
             ctx.bail();
           },
@@ -507,7 +506,6 @@ describe('Supervisor Pattern Integration Tests', () => {
   describe('Hook configuration validation', () => {
     it('should accept all delegation hook options', async () => {
       const delegationConfig = {
-        bailStrategy: 'first' as const,
         onDelegationStart: vi.fn(() => {
           return { proceed: true };
         }),

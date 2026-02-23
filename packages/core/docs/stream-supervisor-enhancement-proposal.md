@@ -61,22 +61,22 @@ User calls agent.stream(messages, options)
 
 ### Current Stop Mechanisms
 
-| Mechanism      | Type              | Description                                        |
-| -------------- | ----------------- | -------------------------------------------------- |
-| `maxSteps`     | number            | Hard limit on iterations (default: 5)              |
-| `stopWhen`     | `StopCondition[]` | Sync/async predicates evaluated after each step    |
-| `finishReason` | string            | LLM signals completion ('stop', 'error')           |
-| `TripWire`     | exception         | Processor-triggered abort with optional retry      |
+| Mechanism      | Type              | Description                                     |
+| -------------- | ----------------- | ----------------------------------------------- |
+| `maxSteps`     | number            | Hard limit on iterations (default: 5)           |
+| `stopWhen`     | `StopCondition[]` | Sync/async predicates evaluated after each step |
+| `finishReason` | string            | LLM signals completion ('stop', 'error')        |
+| `TripWire`     | exception         | Processor-triggered abort with optional retry   |
 
 ### What's Missing (Gap with Network)
 
-| Feature                           | Network Has                | Stream Has         | Gap         |
-| --------------------------------- | -------------------------- | ------------------ | ----------- |
-| Completion scoring                | ✅                         | ❌                 | Critical    |
-| Iteration hooks                   | ✅ `onIterationComplete`   | ❌                 | Critical    |
-| Conversation context for sub-agents | ✅ Filtered history       | ❌ Only tool input | Important   |
-| Delegation observability          | ✅ Events                  | ❌                 | Important   |
-| Early termination (bail)          | ❌                         | ❌                 | Nice-to-have |
+| Feature                             | Network Has              | Stream Has         | Gap          |
+| ----------------------------------- | ------------------------ | ------------------ | ------------ |
+| Completion scoring                  | ✅                       | ❌                 | Critical     |
+| Iteration hooks                     | ✅ `onIterationComplete` | ❌                 | Critical     |
+| Conversation context for sub-agents | ✅ Filtered history      | ❌ Only tool input | Important    |
+| Delegation observability            | ✅ Events                | ❌                 | Important    |
+| Early termination (bail)            | ❌                       | ❌                 | Nice-to-have |
 
 ---
 
@@ -142,19 +142,19 @@ User calls agent.stream(messages, options)
 ```typescript
 interface StreamCompletionConfig {
   /** Scorers to evaluate after each iteration (return 0 or 1) */
-  scorers: MastraScorer[]
+  scorers: MastraScorer[];
   /** How to combine results: 'all' (default) or 'any' */
-  strategy?: 'all' | 'any'
+  strategy?: 'all' | 'any';
   /** Continue iterating on fail (default: false) */
-  continueOnFail?: boolean
+  continueOnFail?: boolean;
   /** Add scorer feedback as system message (default: true) */
-  feedbackToLLM?: boolean
+  feedbackToLLM?: boolean;
   /** Maximum time for scoring in ms (default: 30000) */
-  timeout?: number
+  timeout?: number;
   /** Run scorers in parallel (default: true) */
-  parallel?: boolean
+  parallel?: boolean;
   /** Called after scorers run */
-  onComplete?: (results: StreamCompletionRunResult) => void | Promise<void>
+  onComplete?: (results: StreamCompletionRunResult) => void | Promise<void>;
 }
 ```
 
@@ -168,7 +168,7 @@ const result = await supervisor.stream('Write a research paper', {
     continueOnFail: true,
     feedbackToLLM: true,
   },
-})
+});
 ```
 
 **Implementation:** Reuse `runCompletionScorers()` and `formatCompletionFeedback()` from [packages/core/src/loop/network/validation.ts](../../packages/core/src/loop/network/validation.ts).
@@ -213,13 +213,13 @@ onIterationComplete?: (context: IterationCompleteContext) => Promise<IterationCo
 ```typescript
 const result = await supervisor.stream('Write a paper', {
   onIterationComplete: async ({ allSteps }) => {
-    const text = allSteps.map(s => s.text).join('\n')
-    const citations = (text.match(/\[\d+\]/g) || []).length
+    const text = allSteps.map(s => s.text).join('\n');
+    const citations = (text.match(/\[\d+\]/g) || []).length;
 
-    if (citations >= 5) return { continue: false }
-    return { continue: true, feedback: 'Need more citations' }
+    if (citations >= 5) return { continue: false };
+    return { continue: true, feedback: 'Need more citations' };
   },
-})
+});
 ```
 
 ---
@@ -233,13 +233,13 @@ const result = await supervisor.stream('Write a paper', {
 ```typescript
 interface SubAgentContextConfig {
   /** Include conversation history (default: false) */
-  includeConversationHistory?: boolean
+  includeConversationHistory?: boolean;
   /** Filter internal messages (default: true) */
-  filterInternalMessages?: boolean
+  filterInternalMessages?: boolean;
   /** Maximum messages to include (default: 20) */
-  maxMessages?: number
+  maxMessages?: number;
   /** Custom filter function */
-  messageFilter?: (message: MastraDBMessage) => boolean
+  messageFilter?: (message: MastraDBMessage) => boolean;
 }
 
 // Agent config
@@ -250,7 +250,7 @@ const supervisor = new Agent({
     filterInternalMessages: true,
     maxMessages: 20,
   },
-})
+});
 ```
 
 **Implementation:** Modify `listAgentTools()` to pass filtered messages. Reuse `filterMessagesForSubAgent()` from network.
@@ -294,12 +294,12 @@ onDelegationComplete?: (context: DelegationCompleteContext) => Promise<void>
 ```typescript
 const result = await supervisor.stream('Write a paper', {
   onDelegationStart: ({ agentName, prompt }) => {
-    console.log(`→ ${agentName}: ${prompt.slice(0, 50)}...`)
+    console.log(`→ ${agentName}: ${prompt.slice(0, 50)}...`);
   },
   onDelegationComplete: ({ agentName, duration }) => {
-    console.log(`← ${agentName} (${duration}ms)`)
+    console.log(`← ${agentName} (${duration}ms)`);
   },
-})
+});
 ```
 
 **Usage - Control:**
@@ -308,14 +308,14 @@ const result = await supervisor.stream('Write a paper', {
 const result = await supervisor.stream('Write a paper', {
   onDelegationStart: async ({ agentName, prompt }) => {
     if (agentName === 'premiumAgent' && !user.isPremium) {
-      return { proceed: false, rejectionReason: 'Premium required' }
+      return { proceed: false, rejectionReason: 'Premium required' };
     }
-    return { proceed: true, modifiedPrompt: `${prompt}\n\nBe concise.` }
+    return { proceed: true, modifiedPrompt: `${prompt}\n\nBe concise.` };
   },
   onDelegationComplete: async ({ agentName, result, bail }) => {
-    if (result.text.includes('## Conclusion')) bail()
+    if (result.text.includes('## Conclusion')) bail();
   },
-})
+});
 ```
 
 ---
@@ -325,6 +325,7 @@ const result = await supervisor.stream('Write a paper', {
 **Purpose:** Skip supervisor synthesis when sub-agent output is sufficient.
 
 **Mechanism:** The `bail()` function sets a flag that:
+
 1. Stops the agentic loop after tool execution
 2. Returns sub-agent output as final result
 3. Skips remaining LLM synthesis
@@ -348,7 +349,7 @@ type SupervisorChunkType =
   | { type: 'iteration-feedback'; payload: { message: string } }
   | { type: 'scoring-start'; payload: { scorerIds: string[] } }
   | { type: 'scorer-result'; payload: ScorerResult }
-  | { type: 'scoring-complete'; payload: { complete: boolean; reason?: string } }
+  | { type: 'scoring-complete'; payload: { complete: boolean; reason?: string } };
 ```
 
 ---
@@ -378,39 +379,30 @@ LLM Response → Tool Calls:
 for (const toolCall of toolCalls) {
   if (toolCall.name.startsWith('agent-')) {
     // Sub-agent - fire delegation hooks
-    const agentName = toolCall.name.replace('agent-', '')
+    const agentName = toolCall.name.replace('agent-', '');
 
-    const startResult = await options.onDelegationStart?.({ agentName, prompt: toolCall.args.prompt })
+    const startResult = await options.onDelegationStart?.({ agentName, prompt: toolCall.args.prompt });
 
     if (startResult?.proceed === false) {
-      return { error: `Delegation rejected: ${startResult.rejectionReason}` }
+      return { error: `Delegation rejected: ${startResult.rejectionReason}` };
     }
 
-    const result = await subAgent.generate(startResult?.modifiedPrompt ?? toolCall.args.prompt)
-    await options.onDelegationComplete?.({ agentName, result, bail })
+    const result = await subAgent.generate(startResult?.modifiedPrompt ?? toolCall.args.prompt);
+    await options.onDelegationComplete?.({ agentName, result, bail });
   } else {
     // Regular tool - no hooks
-    await executeTool(toolCall)
+    await executeTool(toolCall);
   }
 }
 ```
 
 ### Concurrent Tool Execution
 
-| Scenario                  | Behavior                                       |
-| ------------------------- | ---------------------------------------------- |
-| 2 regular tools           | Execute concurrently, no hooks                 |
-| 1 regular + 1 sub-agent   | Both execute, hooks fire for sub-agent only    |
-| 2 sub-agents (concurrent) | Both hook cycles run concurrently              |
-
-### Bail Strategy with Concurrent Sub-agents
-
-```typescript
-interface StreamOptions {
-  /** 'first': First bail() wins (default), 'last': Last wins */
-  bailStrategy?: 'first' | 'last'
-}
-```
+| Scenario                  | Behavior                                    |
+| ------------------------- | ------------------------------------------- |
+| 2 regular tools           | Execute concurrently, no hooks              |
+| 1 regular + 1 sub-agent   | Both execute, hooks fire for sub-agent only |
+| 2 sub-agents (concurrent) | Both hook cycles run concurrently           |
 
 ### Rejection Handling
 
@@ -430,25 +422,22 @@ When `onDelegationStart` returns `{ proceed: false }`:
 ```typescript
 interface EnhancedStreamOptions<OUTPUT = undefined> {
   // Existing
-  maxSteps?: number
-  stopWhen?: StopCondition | StopCondition[]
-  memory?: MemoryConfig
-  instructions?: string
-  toolCallConcurrency?: number
-  structuredOutput?: StructuredOutputOptions<OUTPUT>
+  maxSteps?: number;
+  stopWhen?: StopCondition | StopCondition[];
+  memory?: MemoryConfig;
+  instructions?: string;
+  toolCallConcurrency?: number;
+  structuredOutput?: StructuredOutputOptions<OUTPUT>;
 
   // NEW: Completion Scoring
-  completion?: StreamCompletionConfig
+  completion?: StreamCompletionConfig;
 
   // NEW: Iteration Hooks
-  onIterationComplete?: (context: IterationCompleteContext) => Promise<IterationCompleteResult>
+  onIterationComplete?: (context: IterationCompleteContext) => Promise<IterationCompleteResult>;
 
   // NEW: Delegation Hooks
-  onDelegationStart?: (context: DelegationStartContext) => Promise<DelegationStartResult | void>
-  onDelegationComplete?: (context: DelegationCompleteContext) => Promise<void>
-
-  // NEW: Bail Strategy
-  bailStrategy?: 'first' | 'last'
+  onDelegationStart?: (context: DelegationStartContext) => Promise<DelegationStartResult | void>;
+  onDelegationComplete?: (context: DelegationCompleteContext) => Promise<void>;
 }
 ```
 
@@ -457,17 +446,17 @@ interface EnhancedStreamOptions<OUTPUT = undefined> {
 ```typescript
 interface EnhancedAgentConfig {
   // Existing
-  id: string
-  name: string
-  instructions: string | DynamicArgument<string>
-  model: MastraModelConfig
-  agents?: DynamicArgument<Record<string, Agent>>
-  workflows?: DynamicArgument<Record<string, Workflow>>
-  tools?: DynamicArgument<ToolsInput>
-  memory?: DynamicArgument<MastraMemory>
+  id: string;
+  name: string;
+  instructions: string | DynamicArgument<string>;
+  model: MastraModelConfig;
+  agents?: DynamicArgument<Record<string, Agent>>;
+  workflows?: DynamicArgument<Record<string, Workflow>>;
+  tools?: DynamicArgument<ToolsInput>;
+  memory?: DynamicArgument<MastraMemory>;
 
   // NEW: Sub-agent Context Config
-  subAgentContext?: SubAgentContextConfig
+  subAgentContext?: SubAgentContextConfig;
 }
 ```
 
@@ -476,18 +465,18 @@ interface EnhancedAgentConfig {
 ## Part 5: Example - Complete Supervisor
 
 ```typescript
-import { Agent, createScorer } from '@mastra/core'
+import { Agent, createScorer } from '@mastra/core';
 
 const citationScorer = createScorer({
   id: 'citations',
   name: 'Citation Counter',
 }).generateScore(async ({ output }) => {
-  const citations = output.match(/\[\d+\]/g) || []
+  const citations = output.match(/\[\d+\]/g) || [];
   return {
     score: new Set(citations).size >= 5 ? 1 : 0,
     reason: `Found ${new Set(citations).size}/5 required citations`,
-  }
-})
+  };
+});
 
 const paperSupervisor = new Agent({
   id: 'paper-supervisor',
@@ -499,7 +488,7 @@ const paperSupervisor = new Agent({
     filterInternalMessages: true,
     maxMessages: 15,
   },
-})
+});
 
 const result = await paperSupervisor.stream('Write a paper about quantum computing', {
   maxSteps: 20,
@@ -511,27 +500,27 @@ const result = await paperSupervisor.stream('Write a paper about quantum computi
   },
 
   onDelegationStart: async ({ agentName, prompt }) => {
-    console.log(`→ ${agentName}`)
-    return { proceed: true, modifiedPrompt: `${prompt}\n\nFocus on applications.` }
+    console.log(`→ ${agentName}`);
+    return { proceed: true, modifiedPrompt: `${prompt}\n\nFocus on applications.` };
   },
 
   onDelegationComplete: async ({ agentName, result, duration, bail }) => {
-    console.log(`← ${agentName} (${duration}ms)`)
+    console.log(`← ${agentName} (${duration}ms)`);
     if (agentName === 'writerAgent' && result.text.includes('## References')) {
-      bail()
+      bail();
     }
   },
 
   onIterationComplete: async ({ iteration, subAgentsInvoked }) => {
-    console.log(`Iteration ${iteration}: ${subAgentsInvoked.join(', ')}`)
-    return { continue: true }
+    console.log(`Iteration ${iteration}: ${subAgentsInvoked.join(', ')}`);
+    return { continue: true };
   },
-})
+});
 
 for await (const chunk of result.fullStream) {
-  if (chunk.type === 'delegation-start') console.log(`Delegating to ${chunk.payload.agentName}`)
-  if (chunk.type === 'delegation-bail') console.log(`Bailed with ${chunk.payload.agentName} output`)
-  if (chunk.type === 'text-delta') process.stdout.write(chunk.payload.text)
+  if (chunk.type === 'delegation-start') console.log(`Delegating to ${chunk.payload.agentName}`);
+  if (chunk.type === 'delegation-bail') console.log(`Bailed with ${chunk.payload.agentName} output`);
+  if (chunk.type === 'text-delta') process.stdout.write(chunk.payload.text);
 }
 ```
 
@@ -541,48 +530,48 @@ for await (const chunk of result.fullStream) {
 
 ### Phase 1: Core Hooks (Week 1-2)
 
-| Task                              | File                         | Effort |
-| --------------------------------- | ---------------------------- | ------ |
-| Add `onIterationComplete` hook    | `agentic-loop/index.ts`      | Medium |
-| Add `IterationCompleteContext`    | `loop/types.ts`              | Low    |
-| Add feedback-to-messages logic    | `agentic-loop/index.ts`      | Low    |
-| Unit tests                        | `agentic-loop/index.test.ts` | Medium |
+| Task                           | File                         | Effort |
+| ------------------------------ | ---------------------------- | ------ |
+| Add `onIterationComplete` hook | `agentic-loop/index.ts`      | Medium |
+| Add `IterationCompleteContext` | `loop/types.ts`              | Low    |
+| Add feedback-to-messages logic | `agentic-loop/index.ts`      | Low    |
+| Unit tests                     | `agentic-loop/index.test.ts` | Medium |
 
 ### Phase 2: Completion Scoring (Week 2-3)
 
-| Task                              | File                              | Effort |
-| --------------------------------- | --------------------------------- | ------ |
-| Add `completion` option           | `agent.types.ts`, `loop/types.ts` | Low    |
-| Integrate `runCompletionScorers`  | `agentic-loop/index.ts`           | Medium |
-| Add scoring stream events         | `stream/types.ts`                 | Low    |
-| Unit tests                        | `agentic-loop/index.test.ts`      | Medium |
+| Task                             | File                              | Effort |
+| -------------------------------- | --------------------------------- | ------ |
+| Add `completion` option          | `agent.types.ts`, `loop/types.ts` | Low    |
+| Integrate `runCompletionScorers` | `agentic-loop/index.ts`           | Medium |
+| Add scoring stream events        | `stream/types.ts`                 | Low    |
+| Unit tests                       | `agentic-loop/index.test.ts`      | Medium |
 
 ### Phase 3: Delegation Hooks + Bail (Week 3-4)
 
-| Task                                 | File                      | Effort |
-| ------------------------------------ | ------------------------- | ------ |
+| Task                                 | File                        | Effort |
+| ------------------------------------ | --------------------------- | ------ |
 | Add `onDelegationStart` hook         | `agent.ts` (listAgentTools) | Medium |
-| Add return value for reject/modify   | `agent.ts`                | Medium |
-| Add `onDelegationComplete` with bail | `agent.ts`                | Medium |
-| Add delegation stream events         | `stream/types.ts`         | Low    |
-| Unit tests                           | `agent.test.ts`           | Medium |
+| Add return value for reject/modify   | `agent.ts`                  | Medium |
+| Add `onDelegationComplete` with bail | `agent.ts`                  | Medium |
+| Add delegation stream events         | `stream/types.ts`           | Low    |
+| Unit tests                           | `agent.test.ts`             | Medium |
 
 ### Phase 4: Sub-agent Context (Week 4-5)
 
-| Task                              | File             | Effort |
-| --------------------------------- | ---------------- | ------ |
-| Add `subAgentContext` config      | `agent/types.ts` | Low    |
-| Modify `listAgentTools`           | `agent.ts`       | Medium |
-| Port `filterMessagesForSubAgent`  | `agent.ts`       | Low    |
-| Integration tests                 | `agent.test.ts`  | Medium |
+| Task                             | File             | Effort |
+| -------------------------------- | ---------------- | ------ |
+| Add `subAgentContext` config     | `agent/types.ts` | Low    |
+| Modify `listAgentTools`          | `agent.ts`       | Medium |
+| Port `filterMessagesForSubAgent` | `agent.ts`       | Low    |
+| Integration tests                | `agent.test.ts`  | Medium |
 
 ### Phase 5: Network Deprecation (Week 5+)
 
-| Task                               | Effort |
-| ---------------------------------- | ------ |
-| Create migration guide             | Medium |
-| Add deprecation warnings           | Low    |
-| Evaluate adoption                  | -      |
+| Task                     | Effort |
+| ------------------------ | ------ |
+| Create migration guide   | Medium |
+| Add deprecation warnings | Low    |
+| Evaluate adoption        | -      |
 
 ---
 
@@ -590,17 +579,17 @@ for await (const chunk of result.fullStream) {
 
 ### Network Features → Stream Equivalents
 
-| Network Feature                 | Stream Equivalent (After Changes)            |
-| ------------------------------- | -------------------------------------------- |
-| `completion.scorers`            | `completion.scorers` ✅                      |
-| `completion.strategy`           | `completion.strategy` ✅                     |
-| `onIterationComplete`           | `onIterationComplete` ✅                     |
+| Network Feature                 | Stream Equivalent (After Changes)               |
+| ------------------------------- | ----------------------------------------------- |
+| `completion.scorers`            | `completion.scorers` ✅                         |
+| `completion.strategy`           | `completion.strategy` ✅                        |
+| `onIterationComplete`           | `onIterationComplete` ✅                        |
 | Filtered context for sub-agents | `subAgentContext.includeConversationHistory` ✅ |
-| `selectionReason` logging       | Via `onDelegationStart` hook ✅              |
-| Delegation control              | `onDelegationStart` return value ✅          |
-| Network stream events           | Supervisor stream events ✅                  |
-| Required memory                 | Optional memory ✅ Better                    |
-| Separate routing agent          | Implicit routing ✅ Simpler                  |
+| `selectionReason` logging       | Via `onDelegationStart` hook ✅                 |
+| Delegation control              | `onDelegationStart` return value ✅             |
+| Network stream events           | Supervisor stream events ✅                     |
+| Required memory                 | Optional memory ✅ Better                       |
+| Separate routing agent          | Implicit routing ✅ Simpler                     |
 
 ### Why Stream Becomes Superior
 
@@ -615,15 +604,15 @@ for await (const chunk of result.fullStream) {
 
 ## Part 8: Open Questions
 
-| Question                                                   | Proposed Answer                                   |
-| ---------------------------------------------------------- | ------------------------------------------------- |
-| Should `onIterationComplete` run before or after scoring?  | Before - gives user first chance                  |
-| Should bail bypass scoring?                                | Yes - user explicitly chose to stop               |
-| Should we keep network() long-term?                        | Deprecate after adoption proves successful        |
-| How to handle bail + streaming?                            | Emit `delegation-bail` event, close stream        |
-| What if `onDelegationStart` rejects but LLM expects result?| Return tool error explaining rejection            |
-| What happens to in-flight tools when bail is called?       | Let complete, discard results (first bail wins)   |
-| Should regular tools trigger delegation hooks?             | No - hooks only for `agent-` prefixed tools       |
+| Question                                                    | Proposed Answer                                 |
+| ----------------------------------------------------------- | ----------------------------------------------- |
+| Should `onIterationComplete` run before or after scoring?   | Before - gives user first chance                |
+| Should bail bypass scoring?                                 | Yes - user explicitly chose to stop             |
+| Should we keep network() long-term?                         | Deprecate after adoption proves successful      |
+| How to handle bail + streaming?                             | Emit `delegation-bail` event, close stream      |
+| What if `onDelegationStart` rejects but LLM expects result? | Return tool error explaining rejection          |
+| What happens to in-flight tools when bail is called?        | Let complete, discard results (first bail wins) |
+| Should regular tools trigger delegation hooks?              | No - hooks only for `agent-` prefixed tools     |
 
 ---
 

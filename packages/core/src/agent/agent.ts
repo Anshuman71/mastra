@@ -2312,12 +2312,13 @@ export class Agent<
           // manually wrap agent tools with tracing, so that we can pass the
           // current tool span onto the agent to maintain continuity of the trace
           execute: async (inputData: z.infer<typeof agentInputSchema>, context) => {
-            console.dir({ inputData }, { depth: null });
             const startTime = Date.now();
             const toolCallId = context?.agent?.toolCallId || randomUUID();
 
             // Get messages from context - available at tool execution time
             const contextMessages = (context?.agent?.messages || []) as MastraDBMessage[];
+
+            let fullSubAgentMessages: MastraDBMessage[] = contextMessages;
 
             // Derive iteration from the number of assistant messages (rough approximation)
             // Each iteration typically produces an assistant message
@@ -2576,37 +2577,38 @@ export class Agent<
                     });
 
                 const agentResponseMessages = generateResult.response.dbMessages ?? [];
+                // Create user message with the original prompt
+                const userMessage: MastraDBMessage = {
+                  id: this.#mastra?.generateId() || randomUUID(),
+                  role: 'user',
+                  type: 'text',
+                  createdAt: subAgentPromptCreatedAt,
+                  threadId: subAgentThreadId,
+                  resourceId: subAgentResourceId,
+                  content: {
+                    format: 2,
+                    parts: [
+                      {
+                        type: 'text',
+                        text: effectivePrompt,
+                      },
+                    ],
+                  },
+                };
+
+                fullSubAgentMessages = [userMessage, ...agentResponseMessages];
 
                 // Save response messages to sub-agent's memory so the UI can display them
                 const memory = await agent.getMemory({ requestContext });
                 if (memory) {
                   try {
-                    // Create user message with the original prompt
-                    const userMessage: MastraDBMessage = {
-                      id: this.#mastra?.generateId() || randomUUID(),
-                      role: 'user',
-                      type: 'text',
-                      createdAt: subAgentPromptCreatedAt,
-                      threadId: subAgentThreadId,
-                      resourceId: subAgentResourceId,
-                      content: {
-                        format: 2,
-                        parts: [
-                          {
-                            type: 'text',
-                            text: effectivePrompt,
-                          },
-                        ],
-                      },
-                    };
-
                     await memory.createThread({
                       resourceId: subAgentResourceId,
                       threadId: subAgentThreadId,
                     });
 
                     await memory.saveMessages({
-                      messages: [userMessage, ...agentResponseMessages],
+                      messages: fullSubAgentMessages,
                     });
                   } catch (memoryError) {
                     this.logger.error(
@@ -2729,37 +2731,38 @@ export class Agent<
                 }
 
                 const agentResponseMessages = streamResult.messageList.get.response.db();
+                // Create user message with the original prompt
+                const userMessage: MastraDBMessage = {
+                  id: this.#mastra?.generateId() || randomUUID(),
+                  role: 'user',
+                  type: 'text',
+                  createdAt: subAgentPromptCreatedAt,
+                  threadId: subAgentThreadId,
+                  resourceId: subAgentResourceId,
+                  content: {
+                    format: 2,
+                    parts: [
+                      {
+                        type: 'text',
+                        text: effectivePrompt,
+                      },
+                    ],
+                  },
+                };
+
+                fullSubAgentMessages = [userMessage, ...agentResponseMessages];
 
                 // Save response messages to sub-agent's memory so the UI can display them
                 const memory = await agent.getMemory({ requestContext });
                 if (memory) {
                   try {
-                    // Create user message with the original prompt
-                    const userMessage: MastraDBMessage = {
-                      id: this.#mastra?.generateId() || randomUUID(),
-                      role: 'user',
-                      type: 'text',
-                      createdAt: subAgentPromptCreatedAt,
-                      threadId: subAgentThreadId,
-                      resourceId: subAgentResourceId,
-                      content: {
-                        format: 2,
-                        parts: [
-                          {
-                            type: 'text',
-                            text: effectivePrompt,
-                          },
-                        ],
-                      },
-                    };
-
                     await memory.createThread({
                       resourceId: subAgentResourceId,
                       threadId: subAgentThreadId,
                     });
 
                     await memory.saveMessages({
-                      messages: [userMessage, ...agentResponseMessages],
+                      messages: fullSubAgentMessages,
                     });
                   } catch (memoryError) {
                     this.logger.error(
@@ -2820,7 +2823,7 @@ export class Agent<
                     toolCallId,
                     parentAgentId: this.id,
                     parentAgentName: this.name,
-                    messages: contextMessages,
+                    messages: fullSubAgentMessages,
                     bail: () => {
                       bailed = true;
                     },
@@ -2830,16 +2833,35 @@ export class Agent<
 
                   // If bailed, add a marker to the result and signal via requestContext
                   if (bailed) {
-                    result._bailed = true;
                     requestContext.set('__mastra_delegationBailed', true);
                   }
 
                   // Handle feedback if provided
                   if (completeResult?.feedback) {
-                    result._delegationFeedback = completeResult.feedback;
-                  }
-                  if (completeResult?.stopProcessing) {
-                    result._stopProcessing = true;
+                    const feedbackMessage: MastraDBMessage = {
+                      id: this.#mastra?.generateId() || randomUUID(),
+                      role: 'assistant',
+                      type: 'text',
+                      createdAt: new Date(),
+                      content: {
+                        format: 2,
+                        parts: [{ type: 'text', text: completeResult.feedback }],
+                        metadata: {
+                          mode: 'stream',
+                          completionResult: {
+                            suppressFeedback: true,
+                          },
+                        },
+                      },
+                      threadId,
+                      resourceId,
+                    };
+                    const supervisorMemory = await this.getMemory({ requestContext });
+                    if (supervisorMemory) {
+                      await supervisorMemory.saveMessages({
+                        messages: [feedbackMessage],
+                      });
+                    }
                   }
                 } catch (hookError) {
                   this.logger.error(`[Agent:${this.name}] - onDelegationComplete hook error: ${hookError}`);
@@ -2869,7 +2891,7 @@ export class Agent<
                     toolCallId,
                     parentAgentId: this.id,
                     parentAgentName: this.name,
-                    messages: contextMessages,
+                    messages: fullSubAgentMessages,
                     bail: () => {
                       bailed = true;
                     },

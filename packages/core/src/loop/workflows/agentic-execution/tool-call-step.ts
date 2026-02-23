@@ -528,6 +528,13 @@ export function createToolCallStep<Tools extends ToolSet = ToolSet, OUTPUT = und
           };
         }
 
+        if (inputData.toolName?.startsWith('agent-')) {
+          if (typeof args === 'object' && args !== null && 'prompt' in args) {
+            args.threadId = args.threadId || _internal?.threadId;
+            args.resourceId = args.resourceId || _internal?.resourceId;
+          }
+        }
+
         const result = await tool.execute(args, toolOptions);
 
         // Call onOutput hook after successful execution

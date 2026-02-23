@@ -102,91 +102,91 @@ name: "onIterationComplete",
 type: "(context: IterationCompleteContext) => { continue?: boolean; feedback?: string } | void | Promise<{ continue?: boolean; feedback?: string } | void>",
 isOptional: true,
 description:
-  "Callback function called after each iteration completes. Use this to monitor progress, provide feedback to guide the agent, or stop execution early. The callback receives context about the iteration including the current text, tool calls, and finish reason.",
+"Callback function called after each iteration completes. Use this to monitor progress, provide feedback to guide the agent, or stop execution early. The callback receives context about the iteration including the current text, tool calls, and finish reason.",
 properties: [
-  {
-    parameters: [
-      {
-        name: "context.iteration",
-        type: "number",
-        description: "Current iteration number (1-based).",
-      },
-    ],
-  },
-  {
-    parameters: [
-      {
-        name: "context.maxIterations",
-        type: "number | undefined",
-        description: "Maximum iterations allowed (if set).",
-      },
-    ],
-  },
-  {
-    parameters: [
-      {
-        name: "context.text",
-        type: "string",
-        description: "The text response from this iteration.",
-      },
-    ],
-  },
-  {
-    parameters: [
-      {
-        name: "context.isFinal",
-        type: "boolean",
-        description: "Whether this is the final iteration.",
-      },
-    ],
-  },
-  {
-    parameters: [
-      {
-        name: "context.finishReason",
-        type: "string",
-        description: "Reason why this iteration finished (e.g., 'stop', 'length', 'tool-calls').",
-      },
-    ],
-  },
-  {
-    parameters: [
-      {
-        name: "context.toolCalls",
-        type: "ToolCall[]",
-        description: "Tool calls made in this iteration.",
-      },
-    ],
-  },
-  {
-    parameters: [
-      {
-        name: "context.messages",
-        type: "MastraDBMessage[]",
-        description: "All messages accumulated so far.",
-      },
-    ],
-  },
-  {
-    parameters: [
-      {
-        name: "return.continue",
-        type: "boolean",
-        isOptional: true,
-        description: "Set to false to stop execution early.",
-      },
-    ],
-  },
-  {
-    parameters: [
-      {
-        name: "return.feedback",
-        type: "string",
-        isOptional: true,
-        description: "Feedback message to guide the agent's next iteration.",
-      },
-    ],
-  },
+{
+  parameters: [
+    {
+      name: "context.iteration",
+      type: "number",
+      description: "Current iteration number (1-based).",
+    },
+  ],
+},
+{
+  parameters: [
+    {
+      name: "context.maxIterations",
+      type: "number | undefined",
+      description: "Maximum iterations allowed (if set).",
+    },
+  ],
+},
+{
+  parameters: [
+    {
+      name: "context.text",
+      type: "string",
+      description: "The text response from this iteration.",
+    },
+  ],
+},
+{
+  parameters: [
+    {
+      name: "context.isFinal",
+      type: "boolean",
+      description: "Whether this is the final iteration.",
+    },
+  ],
+},
+{
+  parameters: [
+    {
+      name: "context.finishReason",
+      type: "string",
+      description: "Reason why this iteration finished (e.g., 'stop', 'length', 'tool-calls').",
+    },
+  ],
+},
+{
+  parameters: [
+    {
+      name: "context.toolCalls",
+      type: "ToolCall[]",
+      description: "Tool calls made in this iteration.",
+    },
+  ],
+},
+{
+  parameters: [
+    {
+      name: "context.messages",
+      type: "MastraDBMessage[]",
+      description: "All messages accumulated so far.",
+    },
+  ],
+},
+{
+  parameters: [
+    {
+      name: "return.continue",
+      type: "boolean",
+      isOptional: true,
+      description: "Set to false to stop execution early.",
+    },
+  ],
+},
+{
+  parameters: [
+    {
+      name: "return.feedback",
+      type: "string",
+      isOptional: true,
+      description: "Feedback message to guide the agent's next iteration.",
+    },
+  ],
+},
 ],
 },
 {
@@ -194,60 +194,60 @@ name: "completion",
 type: "CompletionConfig",
 isOptional: true,
 description:
-  "Completion scoring configuration that validates whether the task is complete. Uses Mastra's evaluation scorers to automatically check if the agent's response satisfies the completion criteria.",
+"Completion scoring configuration that validates whether the task is complete. Uses Mastra's evaluation scorers to automatically check if the agent's response satisfies the completion criteria.",
 properties: [
-  {
-    parameters: [
-      {
-        name: "scorers",
-        type: "MastraScorer[]",
-        description: "Array of scorers that evaluate task completion. Each scorer returns 0 (failed) or 1 (passed).",
-      },
-    ],
-  },
-  {
-    parameters: [
-      {
-        name: "strategy",
-        type: "'all' | 'any'",
-        isOptional: true,
-        defaultValue: "'all'",
-        description: "Strategy for combining scorer results. 'all' requires all scorers to pass, 'any' requires at least one.",
-      },
-    ],
-  },
-  {
-    parameters: [
-      {
-        name: "onComplete",
-        type: "(result: CompletionRunResult) => void | Promise<void>",
-        isOptional: true,
-        description: "Callback called when completion check finishes. Receives the completion result with individual scorer scores.",
-      },
-    ],
-  },
-  {
-    parameters: [
-      {
-        name: "parallel",
-        type: "boolean",
-        isOptional: true,
-        defaultValue: "true",
-        description: "Whether to run scorers in parallel.",
-      },
-    ],
-  },
-  {
-    parameters: [
-      {
-        name: "timeout",
-        type: "number",
-        isOptional: true,
-        defaultValue: "600000",
-        description: "Maximum time in milliseconds to wait for all scorers to complete.",
-      },
-    ],
-  },
+{
+  parameters: [
+    {
+      name: "scorers",
+      type: "MastraScorer[]",
+      description: "Array of scorers that evaluate task completion. Each scorer returns 0 (failed) or 1 (passed).",
+    },
+  ],
+},
+{
+  parameters: [
+    {
+      name: "strategy",
+      type: "'all' | 'any'",
+      isOptional: true,
+      defaultValue: "'all'",
+      description: "Strategy for combining scorer results. 'all' requires all scorers to pass, 'any' requires at least one.",
+    },
+  ],
+},
+{
+  parameters: [
+    {
+      name: "onComplete",
+      type: "(result: CompletionRunResult) => void | Promise<void>",
+      isOptional: true,
+      description: "Callback called when completion check finishes. Receives the completion result with individual scorer scores.",
+    },
+  ],
+},
+{
+  parameters: [
+    {
+      name: "parallel",
+      type: "boolean",
+      isOptional: true,
+      defaultValue: "true",
+      description: "Whether to run scorers in parallel.",
+    },
+  ],
+},
+{
+  parameters: [
+    {
+      name: "timeout",
+      type: "number",
+      isOptional: true,
+      defaultValue: "600000",
+      description: "Maximum time in milliseconds to wait for all scorers to complete.",
+    },
+  ],
+},
 ],
 },
 {
@@ -255,49 +255,38 @@ name: "delegation",
 type: "DelegationConfig",
 isOptional: true,
 description:
-  "Configuration for sub-agent delegation. Use this to control and monitor when the agent delegates tasks to other agents, including the ability to modify, reject, or bail out of delegations.",
+"Configuration for sub-agent delegation. Use this to control and monitor when the agent delegates tasks to other agents, including the ability to modify, reject, or bail out of delegations.",
 properties: [
-  {
-    parameters: [
-      {
-        name: "onDelegationStart",
-        type: "(context: DelegationStartContext) => DelegationStartResult | void | Promise<DelegationStartResult | void>",
-        isOptional: true,
-        description: "Called before delegating to a sub-agent. Use this to modify the delegation parameters or reject the delegation entirely.",
-      },
-    ],
-  },
-  {
-    parameters: [
-      {
-        name: "onDelegationComplete",
-        type: "(context: DelegationCompleteContext) => void | Promise<void>",
-        isOptional: true,
-        description: "Called after a sub-agent delegation completes. Use this to process the result or call context.bail() to stop further execution.",
-      },
-    ],
-  },
-  {
-    parameters: [
-      {
-        name: "bailStrategy",
-        type: "'first' | 'all'",
-        isOptional: true,
-        defaultValue: "'first'",
-        description: "Strategy for handling bail() calls. 'first' stops on the first bail, 'all' requires all delegations to bail before stopping.",
-      },
-    ],
-  },
-  {
-    parameters: [
-      {
-        name: "contextFilter",
-        type: "(context: ContextFilterContext) => MastraDBMessage[] | Promise<MastraDBMessage[]>",
-        isOptional: true,
-        description: "Callback function called before delegating to a sub-agent. Use this to filter the messages that are passed to the sub-agent.",
-      },
-    ],
-  },
+{
+  parameters: [
+    {
+      name: "onDelegationStart",
+      type: "(context: DelegationStartContext) => DelegationStartResult | void | Promise<DelegationStartResult | void>",
+      isOptional: true,
+      description: "Called before delegating to a sub-agent. Use this to modify the delegation parameters or reject the delegation entirely.",
+    },
+  ],
+},
+{
+  parameters: [
+    {
+      name: "onDelegationComplete",
+      type: "(context: DelegationCompleteContext) => void | Promise<void>",
+      isOptional: true,
+      description: "Called after a sub-agent delegation completes. Use this to process the result or call context.bail() to stop further execution.",
+    },
+  ],
+},
+{
+  parameters: [
+    {
+      name: "contextFilter",
+      type: "(context: ContextFilterContext) => MastraDBMessage[] | Promise<MastraDBMessage[]>",
+      isOptional: true,
+      description: "Callback function called before delegating to a sub-agent. Use this to filter the messages that are passed to the sub-agent.",
+    },
+  ],
+},
 ],
 },
 {
@@ -1249,9 +1238,6 @@ const result = await supervisorAgent.generate(
           return { stopProcessing: true }
         }
       },
-
-      // Stop on first bail() call
-      bailStrategy: 'first',
 
       // Filter context passed to sub-agents
       contextFilter: {

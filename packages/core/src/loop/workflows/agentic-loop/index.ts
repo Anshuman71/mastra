@@ -177,7 +177,6 @@ export function createAgenticLoopWorkflow<Tools extends ToolSet = ToolSet, OUTPU
                     metadata: {
                       mode: 'stream',
                       completionResult: {
-                        passed: true,
                         suppressFeedback: true,
                       },
                     },

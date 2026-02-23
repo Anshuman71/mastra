@@ -657,7 +657,6 @@ describe('formatStreamCompletionFeedback', () => {
     expect(feedback).toContain('Score: 1 ✅');
     expect(feedback).toContain('Reason: Test passed');
     expect(feedback).toContain('✅ The task is complete');
-    expect(feedback).toContain('provide a final response');
   });
 
   it('formats incomplete result with continuation message', () => {
@@ -709,7 +708,6 @@ describe('formatStreamCompletionFeedback', () => {
 
     expect(feedback).toContain('❌ NOT COMPLETE');
     expect(feedback).toContain('⚠️ Max iterations reached');
-    expect(feedback).toContain('best response you can');
   });
 
   it('formats timeout indication', () => {

@@ -18,7 +18,7 @@ The supervisor pattern using `Agent.stream()` and `Agent.generate()` is the reco
 The supervisor pattern provides significant improvements over `.network()`:
 
 | Feature | `.network()` | Supervisor Pattern |
-|---------|--------------|-------------------|
+| - | - | - |
 | **API** | Separate `.network()` method | Uses existing `stream()` / `generate()` methods |
 | **Progress Monitoring** | Limited event streaming | `onIterationComplete` hook with full context |
 | **Delegation Control** | No control over delegations | `onDelegationStart` to modify/reject delegations |
@@ -36,26 +36,26 @@ The supervisor pattern provides significant improvements over `.network()`:
 ### Before: Using `.network()`
 
 ```typescript
-import { Agent } from "@mastra/core/agent";
-import { Memory } from "@mastra/memory";
+import { Agent } from '@mastra/core/agent'
+import { Memory } from '@mastra/memory'
 
 const routingAgent = new Agent({
-  id: "routing-agent",
-  name: "Routing Agent",
-  instructions: "You are a network of researchers and writers...",
-  model: "openai/gpt-5.1",
+  id: 'routing-agent',
+  name: 'Routing Agent',
+  instructions: 'You are a network of researchers and writers...',
+  model: 'openai/gpt-5.1',
   agents: { researchAgent, writingAgent },
   workflows: { cityWorkflow },
   tools: { weatherTool },
   memory: new Memory(),
-});
+})
 
 // Limited control over execution
-const result = await routingAgent.network("Research AI in education");
+const result = await routingAgent.network('Research AI in education')
 
 for await (const chunk of result) {
-  if (chunk.type === "network-execution-event-step-finish") {
-    console.log(chunk.payload.result);
+  if (chunk.type === 'network-execution-event-step-finish') {
+    console.log(chunk.payload.result)
   }
 }
 ```
@@ -63,13 +63,13 @@ for await (const chunk of result) {
 ### After: Using supervisor pattern
 
 ```typescript
-import { Agent } from "@mastra/core/agent";
-import { Memory } from "@mastra/memory";
+import { Agent } from '@mastra/core/agent'
+import { Memory } from '@mastra/memory'
 
 // Agent configuration stays the same
 const supervisorAgent = new Agent({
-  id: "supervisor-agent",
-  name: "Research Supervisor",
+  id: 'supervisor-agent',
+  name: 'Research Supervisor',
   // Clear, specific instructions help the agent make better decisions
   instructions: `You coordinate research and writing tasks.
 
@@ -86,21 +86,21 @@ const supervisorAgent = new Agent({
     4. Use weatherTool for direct weather queries
 
     Always ensure responses are complete before finishing.`,
-  model: "openai/gpt-5.1",
+  model: 'openai/gpt-5.1',
   agents: { researchAgent, writingAgent },
   workflows: { cityWorkflow },
   tools: { weatherTool },
   memory: new Memory(),
-});
+})
 
 // Use .stream() instead of .network()
-const stream = await supervisorAgent.stream("Research AI in education", {
+const stream = await supervisorAgent.stream('Research AI in education', {
   maxSteps: 10,
-});
+})
 
 // Process the stream
 for await (const chunk of stream.textStream) {
-  process.stdout.write(chunk);
+  process.stdout.write(chunk)
 }
 ```
 
@@ -113,31 +113,31 @@ The supervisor pattern's real power comes from its hooks and callbacks. Here's h
 Monitor progress after each iteration and provide feedback:
 
 ```typescript
-const stream = await supervisorAgent.stream("Research AI in education", {
+const stream = await supervisorAgent.stream('Research AI in education', {
   maxSteps: 10,
 
   // Monitor progress after each iteration
-  onIterationComplete: async (context) => {
-    console.log(`Iteration ${context.iteration}/${context.maxIterations}`);
-    console.log(`Finish reason: ${context.finishReason}`);
-    console.log(`Response length: ${context.text.length}`);
+  onIterationComplete: async context => {
+    console.log(`Iteration ${context.iteration}/${context.maxIterations}`)
+    console.log(`Finish reason: ${context.finishReason}`)
+    console.log(`Response length: ${context.text.length}`)
 
     // Provide feedback to guide the agent
     if (!context.text.includes('recommendations')) {
       return {
         continue: true,
         feedback: 'Please include specific recommendations in your analysis.',
-      };
+      }
     }
 
     // Stop early if satisfied
     if (context.text.length > 1000 && context.finishReason === 'stop') {
-      return { continue: false };
+      return { continue: false }
     }
 
-    return { continue: true };
+    return { continue: true }
   },
-});
+})
 ```
 
 ### Delegation control
@@ -145,14 +145,14 @@ const stream = await supervisorAgent.stream("Research AI in education", {
 Control and modify sub-agent delegations:
 
 ```typescript
-const stream = await supervisorAgent.stream("Research AI in education", {
+const stream = await supervisorAgent.stream('Research AI in education', {
   maxSteps: 10,
 
   delegation: {
     // Called before delegating to a sub-agent or workflow
-    onDelegationStart: async (context) => {
-      console.log(`About to delegate to: ${context.primitiveId}`);
-      console.log(`Prompt: ${context.prompt}`);
+    onDelegationStart: async context => {
+      console.log(`About to delegate to: ${context.primitiveId}`)
+      console.log(`Prompt: ${context.prompt}`)
 
       // Add extra instructions for specific agents
       if (context.primitiveId === 'research-agent') {
@@ -160,7 +160,7 @@ const stream = await supervisorAgent.stream("Research AI in education", {
           proceed: true,
           modifiedPrompt: `${context.prompt}\n\nFocus on 2024-2025 data and include citations.`,
           modifiedMaxSteps: 5,
-        };
+        }
       }
 
       // Reject delegation after too many iterations
@@ -168,32 +168,29 @@ const stream = await supervisorAgent.stream("Research AI in education", {
         return {
           proceed: false,
           rejectionReason: 'Max iterations reached. Synthesize current findings.',
-        };
+        }
       }
 
-      return { proceed: true };
+      return { proceed: true }
     },
 
     // Called after a delegation completes
-    onDelegationComplete: async (context) => {
-      console.log(`Completed delegation to: ${context.primitiveId}`);
-      console.log(`Result length: ${context.result?.toString().length}`);
+    onDelegationComplete: async context => {
+      console.log(`Completed delegation to: ${context.primitiveId}`)
+      console.log(`Result length: ${context.result?.toString().length}`)
 
       // Bail out on errors
       if (context.error) {
-        console.error('Delegation failed:', context.error);
-        context.bail();
-        return { stopProcessing: true };
+        console.error('Delegation failed:', context.error)
+        context.bail()
+        return
       }
 
       // Log successful completion
-      console.log('Delegation succeeded');
+      console.log('Delegation succeeded')
     },
-
-    // Stop on first bail() call
-    bailStrategy: 'first',
   },
-});
+})
 ```
 
 ### Context filtering
@@ -201,7 +198,7 @@ const stream = await supervisorAgent.stream("Research AI in education", {
 Control what conversation context is shared with sub-agents:
 
 ```typescript
-const stream = await supervisorAgent.stream("Research AI in education", {
+const stream = await supervisorAgent.stream('Research AI in education', {
   maxSteps: 10,
 
   delegation: {
@@ -210,15 +207,14 @@ const stream = await supervisorAgent.stream("Research AI in education", {
       // Custom filter: remove sensitive information and limit to last 10 messages
       return messages
         .filter(msg => {
-          const content = typeof msg.content === 'string'
-            ? msg.content
-            : JSON.stringify(msg.content);
-          return !content.includes('confidential') && !content.includes('private');
+          const content =
+            typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)
+          return !content.includes('confidential') && !content.includes('private')
         })
-        .slice(-10); // Only pass last 10 messages
+        .slice(-10) // Only pass last 10 messages
     },
   },
-});
+})
 ```
 
 ### Completion scoring
@@ -226,42 +222,42 @@ const stream = await supervisorAgent.stream("Research AI in education", {
 Automatically validate task completion:
 
 ```typescript
-import { createScorer } from '@mastra/core/evals';
+import { createScorer } from '@mastra/core/evals'
 
 const taskCompleteScorer = createScorer({
   id: 'task-complete',
   name: 'Task Completeness',
   description: 'Checks if the research task has been fully completed',
-}).generateScore(async (context) => {
-  const text = (context.run.output || '').toString();
+}).generateScore(async context => {
+  const text = (context.run.output || '').toString()
 
   // Check if response contains required elements
-  const hasAnalysis = text.includes('analysis');
-  const hasRecommendations = text.includes('recommendation');
-  const hasData = /\d{4}/.test(text); // Contains year data
+  const hasAnalysis = text.includes('analysis')
+  const hasRecommendations = text.includes('recommendation')
+  const hasData = /\d{4}/.test(text) // Contains year data
 
   if (hasAnalysis && hasRecommendations && hasData) {
-    return 1; // Complete
+    return 1 // Complete
   }
 
-  return 0; // Not complete
-});
+  return 0 // Not complete
+})
 
-const stream = await supervisorAgent.stream("Research AI in education", {
+const stream = await supervisorAgent.stream('Research AI in education', {
   maxSteps: 10,
 
   // Automatic completion validation
   completion: {
     scorers: [taskCompleteScorer],
     strategy: 'all', // All scorers must pass
-    onComplete: async (result) => {
-      console.log('Task complete:', result.complete);
-      console.log('Scores:', result.scorers);
+    onComplete: async result => {
+      console.log('Task complete:', result.complete)
+      console.log('Scores:', result.scorers)
     },
     // Don't show completion feedback to the user
     suppressFeedback: false,
   },
-});
+})
 ```
 
 ## Memory isolation and context forwarding
@@ -284,20 +280,18 @@ One key improvement in the supervisor pattern is **memory isolation** - sub-agen
 // ✅ Only delegation prompt + response saved to sub-agent memory
 // ✅ Sub-agent memory stays clean, not polluted with supervisor context
 
-const stream = await supervisorAgent.stream(
-  "What is my name and where do I live?",
-  {
-    maxSteps: 10,
-    delegation: {
-      // Each sub-agent invocation uses a fresh unique thread
-      // Full context is forwarded for decision-making
-      // But only the delegation is persisted to sub-agent memory
-    },
-  }
-);
+const stream = await supervisorAgent.stream('What is my name and where do I live?', {
+  maxSteps: 10,
+  delegation: {
+    // Each sub-agent invocation uses a fresh unique thread
+    // Full context is forwarded for decision-making
+    // But only the delegation is persisted to sub-agent memory
+  },
+})
 ```
 
 This ensures sub-agents:
+
 - Have full context to make informed decisions
 - Don't accumulate the entire supervisor conversation in their memory
 - Use fresh, scoped memory threads for each invocation
@@ -311,37 +305,37 @@ Tool approval now properly propagates through the supervisor delegation chain:
 const findUserTool = createTool({
   id: 'find-user',
   requireApproval: true,
-  execute: async (input) => {
-    return await database.findUser(input);
+  execute: async input => {
+    return await database.findUser(input)
   },
-});
+})
 
 const dataAgent = new Agent({
   id: 'data-agent',
   tools: { findUserTool },
-});
+})
 
 const supervisorAgent = new Agent({
   id: 'supervisor',
   agents: { dataAgent },
   memory: new Memory(),
-});
+})
 
 // When supervisor delegates to dataAgent and findUserTool requires approval
-const stream = await supervisorAgent.stream("Find user with ID 123");
+const stream = await supervisorAgent.stream('Find user with ID 123')
 
 for await (const chunk of stream.fullStream) {
   if (chunk.type === 'tool-call-approval') {
-    console.log('Tool requires approval:', chunk.payload.toolName);
+    console.log('Tool requires approval:', chunk.payload.toolName)
 
     // Approve or decline
     const resumeStream = await supervisorAgent.approveToolCall({
       runId: stream.runId,
       toolCallId: chunk.payload.toolCallId,
-    });
+    })
 
     for await (const resumeChunk of resumeStream.textStream) {
-      process.stdout.write(resumeChunk);
+      process.stdout.write(resumeChunk)
     }
   }
 }
@@ -352,18 +346,18 @@ for await (const chunk of stream.fullStream) {
 For non-streaming use cases, use `generate()` with the same supervisor options:
 
 ```typescript
-const result = await supervisorAgent.generate("Research AI in education", {
+const result = await supervisorAgent.generate('Research AI in education', {
   maxSteps: 10,
 
-  onIterationComplete: async (context) => {
-    console.log(`Iteration ${context.iteration}`);
-    return { continue: true };
+  onIterationComplete: async context => {
+    console.log(`Iteration ${context.iteration}`)
+    return { continue: true }
   },
 
   delegation: {
-    onDelegationStart: async (context) => {
-      console.log(`Delegating to: ${context.primitiveId}`);
-      return { proceed: true };
+    onDelegationStart: async context => {
+      console.log(`Delegating to: ${context.primitiveId}`)
+      return { proceed: true }
     },
   },
 
@@ -371,9 +365,9 @@ const result = await supervisorAgent.generate("Research AI in education", {
     scorers: [taskCompleteScorer],
     strategy: 'all',
   },
-});
+})
 
-console.log(result.text);
+console.log(result.text)
 ```
 
 ## Event mapping reference
@@ -381,7 +375,7 @@ console.log(result.text);
 If you were handling specific `.network()` events, here's how they map to supervisor pattern chunks:
 
 | `.network()` event | Supervisor pattern chunk |
-|-------------------|-------------------------|
+| - | - |
 | `routing-agent-start` | `step-start` |
 | `routing-agent-end` | `step-finish` |
 | `agent-execution-start` | `step-start` (when delegating) |
@@ -398,16 +392,16 @@ If you were handling specific `.network()` events, here's how they map to superv
 ### What the supervisor needs to know
 
 1. **Available resources**: What agents, workflows, and tools are available
-2. **When to use each resource**: Clear criteria for delegation
-3. **How to coordinate**: Order of operations, dependencies
-4. **Success criteria**: When the task is complete
+1. **When to use each resource**: Clear criteria for delegation
+1. **How to coordinate**: Order of operations, dependencies
+1. **Success criteria**: When the task is complete
 
 ### Example: Before and after
 
 **❌ Vague instructions:**
 
 ```typescript
-instructions: "You coordinate multiple agents to help users."
+instructions: 'You coordinate multiple agents to help users.'
 ```
 
 **✅ Clear, specific instructions:**
@@ -447,7 +441,7 @@ const researchAgent = new Agent({
     Returns concise bullet-point summaries with key facts and sources.
     Does not write full articles or narrative content.`,
   // ...
-});
+})
 
 const writingAgent = new Agent({
   id: 'writing-agent',
@@ -455,7 +449,7 @@ const writingAgent = new Agent({
     Produces full paragraphs and complete articles.
     Best used after research has been gathered.`,
   // ...
-});
+})
 ```
 
 ## Migration checklist
