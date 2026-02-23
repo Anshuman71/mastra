@@ -1,9 +1,18 @@
 import { openai } from '@ai-sdk/openai-v5';
 import type { LanguageModelV2 } from '@ai-sdk/provider-v5';
 import { MockLanguageModelV2 } from '@internal/ai-sdk-v5/test';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { Agent } from './index';
+
+vi.mock('node:crypto', async () => {
+  const actual = await vi.importActual('node:crypto');
+
+  return {
+    ...actual,
+    randomUUID: vi.fn(),
+  };
+});
 
 describe('StructuredOutputProcessor Integration Tests', () => {
   function testStructuredOutput(model: LanguageModelV2) {

@@ -1,3 +1,4 @@
+import { useLLMRecording } from '@internal/llm-recorder';
 import { describe, it, expect, beforeAll } from 'vitest';
 import { z } from 'zod';
 import { Agent } from '../../agent/index.js';
@@ -42,6 +43,16 @@ const weatherTool = {
     };
   },
 };
+
+useLLMRecording('model-router.e2e.test', {
+  // transformRequest({ url, body }) {
+  //   console.log('body', JSON.stringify(body, null, 2));
+  //   return {
+  //     url,
+  //     body,
+  //   };
+  // },
+});
 
 describe('ModelRouter Integration Tests', () => {
   let availableProviders: string[] = [];

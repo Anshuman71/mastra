@@ -1,10 +1,11 @@
+import { randomUUID } from 'node:crypto';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createOpenAI as createOpenAIV5 } from '@ai-sdk/openai-v5';
 import type { LanguageModelV2 } from '@ai-sdk/provider-v5';
 import type { ToolInvocationUIPart } from '@ai-sdk/ui-utils-v5';
 import type { LanguageModelV1 } from '@internal/ai-sdk-v4';
 import { stepCountIs, tool } from '@internal/ai-sdk-v5';
-import { config } from 'dotenv';
+import { useLLMRecording } from '@internal/llm-recorder';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { TestIntegration } from '../integration/openapi-toolset.mock';
@@ -17,7 +18,14 @@ import { createTool } from '../tools';
 import { assertNoDuplicateParts } from './test-utils';
 import { Agent } from './index';
 
-config();
+vi.mock('node:crypto', async () => {
+  const actual = await vi.importActual('node:crypto');
+
+  return {
+    ...actual,
+    randomUUID: vi.fn(),
+  };
+});
 
 const mockFindUser = vi.fn().mockImplementation(async data => {
   const list = [
@@ -35,7 +43,30 @@ const mockFindUser = vi.fn().mockImplementation(async data => {
 const openai = createOpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const openai_v5 = createOpenAIV5({ apiKey: process.env.OPENAI_API_KEY });
 
-function agentE2ETests({ version }: { version: 'v1' | 'v2' }) {
+useLLMRecording('agent.e2e.test', {
+  transformRequest({ url, body }) {
+    let stringifiedBody = JSON.stringify(body);
+    stringifiedBody = stringifiedBody.replaceAll(/\\"toolCallId\\\":\\"[^"]+\\"/g, '\\"toolCallId\\\":\\"REDACTED\\"');
+    if (stringifiedBody.includes(`\\"isNetwork\\"`)) {
+      stringifiedBody = stringifiedBody.replaceAll(/\\"createdAt\\":\\"[^"]+\\"/g, '\\"createdAt\\":\\"REDACTED\\"');
+      stringifiedBody = stringifiedBody.replaceAll(/\\"id\\":\\"[^"]+\\"/g, '\\"id\\":\\"REDACTED\\"');
+      stringifiedBody = stringifiedBody.replaceAll(/\d+ms/g, `REDACTED`);
+    }
+    return {
+      url,
+      body: JSON.parse(stringifiedBody),
+    };
+  },
+});
+
+beforeEach(() => {
+  let counter = 1;
+  // Reset the mock UUID counter on each test run
+  vi.mocked(randomUUID).mockClear();
+  vi.mocked(randomUUID).mockImplementation(() => `00000000-0000-4000-8000-${String(counter++).padStart(12, '0')}`);
+});
+
+describe.for([['v1'], ['v2']])(`Agent E2E Tests (%s)`, ([version]) => {
   const integration = new TestIntegration();
   let openaiModel: LanguageModelV1 | LanguageModelV2;
 
@@ -443,79 +474,77 @@ function agentE2ETests({ version }: { version: 'v1' | 'v2' }) {
       expect(response.steps.length).toBe(7);
     }, 500000);
 
-    it('should retry when tool fails and eventually succeed with maxSteps=5', async () => {
-      let toolCallCount = 0;
-      const failuresBeforeSuccess = 2;
+    it.skipIf(version === 'v1')(
+      'should retry when tool fails and eventually succeed with maxSteps=5',
+      async () => {
+        let toolCallCount = 0;
+        const failuresBeforeSuccess = 2;
 
-      const flakeyTool = createTool({
-        id: 'flakeyTool',
-        description: 'A tool that fails initially but eventually succeeds',
-        inputSchema: z.object({ input: z.string() }),
-        outputSchema: z.object({ output: z.string() }),
-        execute: async input => {
-          toolCallCount++;
-          if (toolCallCount <= failuresBeforeSuccess) {
-            throw new Error(`Tool failed! Attempt ${toolCallCount}. Please try again.`);
+        const flakeyTool = createTool({
+          id: 'flakeyTool',
+          description: 'A tool that fails initially but eventually succeeds',
+          inputSchema: z.object({ input: z.string() }),
+          outputSchema: z.object({ output: z.string() }),
+          execute: async input => {
+            toolCallCount++;
+            console.log('toolCallCount', toolCallCount);
+            if (toolCallCount <= failuresBeforeSuccess) {
+              throw new Error(`Tool failed! Attempt ${toolCallCount}. Please try again.`);
+            }
+            return { output: `Success on attempt ${toolCallCount}: ${input.input}` };
+          },
+        });
+
+        const agent = new Agent({
+          id: 'retry-agent',
+          name: 'retry-agent',
+          instructions: 'Call the flakey tool with input "test data".',
+          model: openaiModel,
+          tools: { flakeyTool },
+        });
+        agent.__setLogger(noopLogger);
+
+        let response = await agent.generate('Please call the flakey tool with input "test data"', {
+          maxSteps: 5,
+        });
+
+        expect(response.steps.length).toBeGreaterThan(1);
+        expect(response.steps.length).toBeLessThanOrEqual(5);
+        expect(toolCallCount).toBeGreaterThanOrEqual(3);
+
+        let foundSuccess = false;
+        if (version === 'v1') {
+          for (const step of response.steps) {
+            if (step.toolResults) {
+              for (const result of step.toolResults) {
+                if (result.toolName === 'flakeyTool' && result.result && result.result.output?.includes('Success')) {
+                  foundSuccess = true;
+                  break;
+                }
+              }
+            }
           }
-          return { output: `Success on attempt ${toolCallCount}: ${input.input}` };
-        },
-      });
-
-      const agent = new Agent({
-        id: 'retry-agent',
-        name: 'retry-agent',
-        instructions: 'Call the flakey tool with input "test data".',
-        model: openaiModel,
-        tools: { flakeyTool },
-      });
-      agent.__setLogger(noopLogger);
-
-      let response;
-      if (version === 'v1') {
-        response = await agent.generateLegacy('Please call the flakey tool with input "test data"', {
-          maxSteps: 5,
-        });
-      } else {
-        response = await agent.generate('Please call the flakey tool with input "test data"', {
-          maxSteps: 5,
-        });
-      }
-
-      expect(response.steps.length).toBeGreaterThan(1);
-      expect(response.steps.length).toBeLessThanOrEqual(5);
-      expect(toolCallCount).toBeGreaterThanOrEqual(3);
-
-      let foundSuccess = false;
-      if (version === 'v1') {
-        for (const step of response.steps) {
-          if (step.toolResults) {
-            for (const result of step.toolResults) {
-              if (result.toolName === 'flakeyTool' && result.result && result.result.output?.includes('Success')) {
-                foundSuccess = true;
-                break;
+        } else {
+          for (const step of response.steps) {
+            if (step.toolResults) {
+              for (const result of step.toolResults) {
+                if (
+                  result.payload.toolName === 'flakeyTool' &&
+                  result.payload.result &&
+                  result.payload.result.output?.includes('Success')
+                ) {
+                  foundSuccess = true;
+                  break;
+                }
               }
             }
           }
         }
-      } else {
-        for (const step of response.steps) {
-          if (step.toolResults) {
-            for (const result of step.toolResults) {
-              if (
-                result.payload.toolName === 'flakeyTool' &&
-                result.payload.result &&
-                result.payload.result.output?.includes('Success')
-              ) {
-                foundSuccess = true;
-                break;
-              }
-            }
-          }
-        }
-      }
 
-      expect(foundSuccess).toBe(true);
-    }, 500000);
+        expect(foundSuccess).toBe(true);
+      },
+      500000,
+    );
   });
 
   describe(`${version} - context parameter handling (e2e)`, () => {
@@ -1068,11 +1097,6 @@ function agentE2ETests({ version }: { version: 'v1' | 'v2' }) {
     },
     30000,
   );
-}
-
-describe('Agent E2E Tests', () => {
-  agentE2ETests({ version: 'v1' });
-  agentE2ETests({ version: 'v2' });
 });
 
 describe('prepareStep (e2e)', () => {

@@ -3,8 +3,19 @@ import type { AnthropicProviderOptions } from '@ai-sdk/anthropic-v5';
 import { google } from '@ai-sdk/google-v5';
 import { openai } from '@ai-sdk/openai-v5';
 import { openai as openaiV6 } from '@ai-sdk/openai-v6';
+import { useLLMRecording } from '@internal/llm-recorder';
 import { describe, expect, it } from 'vitest';
 import { Agent } from '../agent';
+
+useLLMRecording('provider-tools.e2e.test', {
+  //   transformRequest({ url, body }) {
+  //     console.log('body', JSON.stringify(body, null, 2));
+  //     return {
+  //       url,
+  //       body,
+  //     };
+  //   },
+});
 
 describe('provider-defined tools', () => {
   it('should handle Google search tool', { timeout: 120000 }, async () => {
