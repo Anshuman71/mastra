@@ -42,26 +42,26 @@ Mastra agent networks operate using these principles:
 An agent network is built around a top-level routing agent that delegates tasks to subagents, workflows, and tools defined in its configuration. Memory is configured on the routing agent using the `memory` option, and `instructions` define the agent's routing behavior.
 
 ```typescript {22-23,26,29} title="src/mastra/agents/routing-agent.ts"
-import { Agent } from "@mastra/core/agent";
-import { Memory } from "@mastra/memory";
-import { LibSQLStore } from "@mastra/libsql";
+import { Agent } from '@mastra/core/agent'
+import { Memory } from '@mastra/memory'
+import { LibSQLStore } from '@mastra/libsql'
 
-import { researchAgent } from "./research-agent";
-import { writingAgent } from "./writing-agent";
+import { researchAgent } from './research-agent'
+import { writingAgent } from './writing-agent'
 
-import { cityWorkflow } from "../workflows/city-workflow";
-import { weatherTool } from "../tools/weather-tool";
+import { cityWorkflow } from '../workflows/city-workflow'
+import { weatherTool } from '../tools/weather-tool'
 
 export const routingAgent = new Agent({
-  id: "routing-agent",
-  name: "Routing Agent",
+  id: 'routing-agent',
+  name: 'Routing Agent',
   instructions: `
       You are a network of writers and researchers.
       The user will ask you to research a topic.
       Always respond with a complete report—no bullet points.
       Write in full paragraphs, like a blog post.
       Do not answer with incomplete or uncertain information.`,
-  model: "openai/gpt-5.1",
+  model: 'openai/gpt-5.1',
   agents: {
     researchAgent,
     writingAgent,
@@ -75,10 +75,10 @@ export const routingAgent = new Agent({
   memory: new Memory({
     storage: new LibSQLStore({
       id: 'mastra-storage',
-      url: "file:../mastra.db",
+      url: 'file:../mastra.db',
     }),
   }),
-});
+})
 ```
 
 ### Writing descriptions for network primitives
@@ -91,22 +91,22 @@ Each subagent in a network should include a clear `description` that explains wh
 
 ```typescript title="src/mastra/agents/research-agent.ts"
 export const researchAgent = new Agent({
-  id: "research-agent",
-  name: "Research Agent",
+  id: 'research-agent',
+  name: 'Research Agent',
   description: `This agent gathers concise research insights in bullet-point form.
     It's designed to extract key facts without generating full
     responses or narrative content.`,
-});
+})
 ```
 
 ```typescript title="src/mastra/agents/writing-agent.ts"
 export const writingAgent = new Agent({
-  id: "writing-agent",
-  name: "Writing Agent",
+  id: 'writing-agent',
+  name: 'Writing Agent',
   description: `This agent turns researched material into well-structured
     written content. It produces full-paragraph reports with no bullet points,
     suitable for use in articles, summaries, or blog posts.`,
-});
+})
 ```
 
 #### Workflow descriptions
@@ -115,7 +115,7 @@ Workflows in a network should include a `description` to explain their purpose, 
 
 ```typescript title="src/mastra/workflows/city-workflow.ts"
 export const cityWorkflow = createWorkflow({
-  id: "city-workflow",
+  id: 'city-workflow',
   description: `This workflow handles city-specific research tasks.
     It first gathers factual information about the city, then synthesizes
     that research into a full written report. Use it when the user input
@@ -126,7 +126,7 @@ export const cityWorkflow = createWorkflow({
   outputSchema: z.object({
     text: z.string(),
   }),
-});
+})
 ```
 
 #### Tool descriptions
@@ -135,7 +135,7 @@ Tools in a network should include a `description` to explain their purpose, alon
 
 ```typescript title="src/mastra/tools/weather-tool.ts"
 export const weatherTool = createTool({
-  id: "weather-tool",
+  id: 'weather-tool',
   description: ` Retrieves current weather information using the wttr.in API.
     Accepts a city or location name as input and returns a short weather summary.
     Use this tool whenever up-to-date weather data is requested.
@@ -146,7 +146,7 @@ export const weatherTool = createTool({
   outputSchema: z.object({
     weather: z.string(),
   }),
-});
+})
 ```
 
 ## Calling agent networks
@@ -158,14 +158,12 @@ Call a Mastra agent network using `.network()` with a user message. The method r
 In this example, the network interprets the message and would route the request to both the `researchAgent` and `writingAgent` to generate a complete response.
 
 ```typescript
-const result = await routingAgent.network(
-  "Tell me three cool ways to use Mastra",
-);
+const result = await routingAgent.network('Tell me three cool ways to use Mastra')
 
 for await (const chunk of result) {
-  console.log(chunk.type);
-  if (chunk.type === "network-execution-event-step-finish") {
-    console.log(chunk.payload.result);
+  console.log(chunk.type)
+  if (chunk.type === 'network-execution-event-step-finish') {
+    console.log(chunk.payload.result)
   }
 }
 ```
@@ -194,19 +192,17 @@ network-execution-event-step-finish
 In this example, the routing agent recognizes the city name in the message and runs the `cityWorkflow`. The workflow defines steps that call the `researchAgent` to gather facts, then the `writingAgent` to generate the final text.
 
 ```typescript
-const result = await routingAgent.network(
-  "Tell me some historical facts about London",
-);
+const result = await routingAgent.network('Tell me some historical facts about London')
 
 for await (const chunk of result) {
-  console.log(chunk.type);
-  if (chunk.type === "network-execution-event-step-finish") {
-    console.log(chunk.payload.result);
+  console.log(chunk.type)
+  if (chunk.type === 'network-execution-event-step-finish') {
+    console.log(chunk.payload.result)
   }
 }
 ```
 
-#### Workflow output
+### Workflow output
 
 The following `chunk.type` events are emitted during this request:
 
@@ -227,12 +223,12 @@ network-execution-event-step-finish
 In this example, the routing agent skips the `researchAgent`, `writingAgent`, and `cityWorkflow`, and calls the `weatherTool` directly to complete the task.
 
 ```typescript
-const result = await routingAgent.network("What's the weather in London?");
+const result = await routingAgent.network("What's the weather in London?")
 
 for await (const chunk of result) {
-  console.log(chunk.type);
-  if (chunk.type === "network-execution-event-step-finish") {
-    console.log(chunk.payload.result);
+  console.log(chunk.type)
+  if (chunk.type === 'network-execution-event-step-finish') {
+    console.log(chunk.payload.result)
   }
 }
 ```
@@ -254,37 +250,37 @@ network-execution-event-step-finish
 When you need typed, validated results from a network, use the `structuredOutput` option. After the network completes its task, it generates a structured response matching your schema.
 
 ```typescript
-import { z } from "zod";
+import { z } from 'zod'
 
 const resultSchema = z.object({
-  summary: z.string().describe("A brief summary of the findings"),
-  recommendations: z.array(z.string()).describe("List of recommendations"),
-  confidence: z.number().min(0).max(1).describe("Confidence score"),
-});
+  summary: z.string().describe('A brief summary of the findings'),
+  recommendations: z.array(z.string()).describe('List of recommendations'),
+  confidence: z.number().min(0).max(1).describe('Confidence score'),
+})
 
-const stream = await routingAgent.network("Research AI trends", {
+const stream = await routingAgent.network('Research AI trends', {
   structuredOutput: {
     schema: resultSchema,
   },
-});
+})
 
 // Consume the stream
 for await (const chunk of stream) {
-  if (chunk.type === "network-object") {
+  if (chunk.type === 'network-object') {
     // Partial object during generation
-    console.log("Partial:", chunk.payload.object);
+    console.log('Partial:', chunk.payload.object)
   }
-  if (chunk.type === "network-object-result") {
+  if (chunk.type === 'network-object-result') {
     // Final structured object
-    console.log("Final:", chunk.payload.object);
+    console.log('Final:', chunk.payload.object)
   }
 }
 
 // Get the typed result
-const result = await stream.object;
-console.log(result?.summary);
-console.log(result?.recommendations);
-console.log(result?.confidence);
+const result = await stream.object
+console.log(result?.summary)
+console.log(result?.recommendations)
+console.log(result?.confidence)
 ```
 
 ### Streaming partial objects
@@ -292,17 +288,17 @@ console.log(result?.confidence);
 For real-time updates during structured output generation, use `objectStream`:
 
 ```typescript
-const stream = await routingAgent.network("Analyze market data", {
+const stream = await routingAgent.network('Analyze market data', {
   structuredOutput: { schema: resultSchema },
-});
+})
 
 // Stream partial objects as they're generated
 for await (const partial of stream.objectStream) {
-  console.log("Building result:", partial);
+  console.log('Building result:', partial)
 }
 
 // Get the final typed result
-const final = await stream.object;
+const final = await stream.object
 ```
 
 ## Supervisor Pattern Features
@@ -316,8 +312,8 @@ The supervisor pattern implements **memory isolation** - sub-agents receive the 
 **How it works:**
 
 1. **Full context forwarded** - When the supervisor delegates to a sub-agent, the sub-agent receives ALL messages from the supervisor's conversation (user messages, assistant responses, completion feedback, tool results)
-2. **Scoped memory saves** - Only the delegation prompt and the sub-agent's response are saved to the sub-agent's memory
-3. **Fresh thread per invocation** - Each delegation uses a unique thread ID, ensuring clean separation
+1. **Scoped memory saves** - Only the delegation prompt and the sub-agent's response are saved to the sub-agent's memory
+1. **Fresh thread per invocation** - Each delegation uses a unique thread ID, ensuring clean separation
 
 **Example:**
 
@@ -329,9 +325,7 @@ The supervisor pattern implements **memory isolation** - sub-agents receive the 
 // Assistant: "How lovely!"
 // User: "What is my name and where do I live?"
 
-const stream = await supervisorAgent.stream(
-  "What is my name and where do I live?"
-);
+const stream = await supervisorAgent.stream('What is my name and where do I live?')
 
 // When supervisor delegates to a sub-agent:
 // ✅ Sub-agent receives all 5 messages above (full context)
@@ -349,44 +343,44 @@ Tool approvals properly propagate through the supervisor delegation chain. When 
 **Example:**
 
 ```typescript
-import { createTool } from '@mastra/core/tools';
+import { createTool } from '@mastra/core/tools'
 
 // Sub-agent with approval-required tool
 const sensitiveDataTool = createTool({
   id: 'get-user-data',
   requireApproval: true,
-  execute: async (input) => {
-    return await database.getUserData(input.userId);
+  execute: async input => {
+    return await database.getUserData(input.userId)
   },
-});
+})
 
 const dataAgent = new Agent({
   id: 'data-agent',
   name: 'Data Agent',
   tools: { sensitiveDataTool },
-});
+})
 
 const supervisorAgent = new Agent({
   id: 'supervisor',
   agents: { dataAgent },
   memory: new Memory(),
-});
+})
 
 // When supervisor delegates to dataAgent and tool requires approval
-const stream = await supervisorAgent.stream("Get data for user 123");
+const stream = await supervisorAgent.stream('Get data for user 123')
 
 for await (const chunk of stream.fullStream) {
   if (chunk.type === 'tool-call-approval') {
-    console.log('Tool requires approval:', chunk.payload.toolName);
+    console.log('Tool requires approval:', chunk.payload.toolName)
 
     // Approve the tool call
     const resumeStream = await supervisorAgent.approveToolCall({
       runId: stream.runId,
       toolCallId: chunk.payload.toolCallId,
-    });
+    })
 
     for await (const resumeChunk of resumeStream.textStream) {
-      process.stdout.write(resumeChunk);
+      process.stdout.write(resumeChunk)
     }
   }
 }
@@ -401,26 +395,23 @@ When using completion scorers (for task validation), the completion feedback is 
 **Example:**
 
 ```typescript
-import { createScorer } from '@mastra/core/evals';
+import { createScorer } from '@mastra/core/evals'
 
 const taskCompleteScorer = createScorer({
   id: 'task-complete',
   name: 'Task Completeness',
-}).generateScore(async (context) => {
-  const text = context.currentText;
-  return text.includes('recommendation') ? 1 : 0;
-});
+}).generateScore(async context => {
+  const text = context.currentText
+  return text.includes('recommendation') ? 1 : 0
+})
 
-const stream = await supervisorAgent.stream(
-  "Research AI trends",
-  {
-    maxSteps: 10,
-    completion: {
-      scorers: [taskCompleteScorer],
-      strategy: 'all',
-    },
-  }
-);
+const stream = await supervisorAgent.stream('Research AI trends', {
+  maxSteps: 10,
+  completion: {
+    scorers: [taskCompleteScorer],
+    strategy: 'all',
+  },
+})
 
 // First iteration: Sub-agent responds without recommendations
 // Completion check runs: FAIL (missing recommendations)
@@ -444,17 +435,17 @@ This creates a feedback loop where sub-agents can learn from validation failures
 Your supervisor agent's `instructions` should clearly specify:
 
 1. **Available resources** - What agents, workflows, and tools are available
-2. **When to use each** - Clear criteria for delegation decisions
-3. **How to coordinate** - Order of operations, dependencies between tasks
-4. **Success criteria** - When to stop iterating and return results
+1. **When to use each** - Clear criteria for delegation decisions
+1. **How to coordinate** - Order of operations, dependencies between tasks
+1. **Success criteria** - When to stop iterating and return results
 
 **❌ Vague instructions:**
 
 ```typescript
 const supervisorAgent = new Agent({
-  instructions: "You coordinate agents to help users.",
+  instructions: 'You coordinate agents to help users.',
   agents: { researchAgent, writingAgent },
-});
+})
 ```
 
 **✅ Clear, specific instructions:**
@@ -483,7 +474,7 @@ Success criteria:
 Only respond to the user when you're confident the task is complete.`,
   agents: { researchAgent, writingAgent },
   tools: { searchTool },
-});
+})
 ```
 
 #### What sub-agents need
@@ -496,7 +487,7 @@ Each sub-agent should have a clear `description` that helps the supervisor under
 const researchAgent = new Agent({
   id: 'research-agent',
   description: 'Helps with research',
-});
+})
 ```
 
 **✅ Clear, specific description:**
@@ -508,10 +499,11 @@ const researchAgent = new Agent({
     Returns concise bullet-point summaries with key facts and sources.
     Does not write full articles or narrative content.
     Best for initial research before writing or analysis.`,
-});
+})
 ```
 
 Clear descriptions improve:
+
 - **Delegation accuracy** - Supervisor chooses the right agent for each subtask
 - **Prompt quality** - Supervisor provides appropriate context to each agent
 - **Task completion** - Agents understand their role and deliver expected output
@@ -524,7 +516,7 @@ The supervisor pattern provides a modern, more powerful alternative to `.network
 ### Key Improvements
 
 | Feature | `.network()` | Supervisor Pattern (`.stream()` / `.generate()`) |
-|---------|--------------|--------------------------------------------------|
+| - | - | - |
 | **API** | Separate `.network()` method | Uses existing `stream()` / `generate()` methods |
 | **Progress Monitoring** | Limited event streaming | `onIterationComplete` hook with full context |
 | **Delegation Control** | No control over delegations | `onDelegationStart` to modify/reject delegations |
@@ -544,24 +536,22 @@ The supervisor pattern provides a modern, more powerful alternative to `.network
 
 ```typescript
 const routingAgent = new Agent({
-  id: "routing-agent",
-  name: "Routing Agent",
-  instructions: "You are a network of researchers and writers...",
-  model: "openai/gpt-5.1",
+  id: 'routing-agent',
+  name: 'Routing Agent',
+  instructions: 'You are a network of researchers and writers...',
+  model: 'openai/gpt-5.1',
   agents: { researchAgent, writingAgent },
   workflows: { cityWorkflow },
   tools: { weatherTool },
   memory,
-});
+})
 
 // Limited control over execution
-const result = await routingAgent.network(
-  "Research AI in education"
-);
+const result = await routingAgent.network('Research AI in education')
 
 for await (const chunk of result) {
-  if (chunk.type === "network-execution-event-step-finish") {
-    console.log(chunk.payload.result);
+  if (chunk.type === 'network-execution-event-step-finish') {
+    console.log(chunk.payload.result)
   }
 }
 ```
@@ -571,8 +561,8 @@ for await (const chunk of result) {
 ```typescript
 // Same agent setup - but with clear, detailed instructions
 const supervisorAgent = new Agent({
-  id: "supervisor-agent",
-  name: "Research Supervisor",
+  id: 'supervisor-agent',
+  name: 'Research Supervisor',
   // Clear instructions help the supervisor make better delegation decisions
   instructions: `You coordinate research and writing tasks using specialized agents.
 
@@ -589,94 +579,91 @@ Delegation strategy:
 4. For weather queries: Use weatherTool directly
 
 Always ensure responses are complete before finishing.`,
-  model: "openai/gpt-5.1",
+  model: 'openai/gpt-5.1',
   agents: { researchAgent, writingAgent },
   workflows: { cityWorkflow },
   tools: { weatherTool },
   memory,
-});
+})
 
 // Full control with hooks and completion scoring
-const stream = await supervisorAgent.stream(
-  "Research AI in education",
-  {
-    maxSteps: 10,
+const stream = await supervisorAgent.stream('Research AI in education', {
+  maxSteps: 10,
 
-    // Monitor progress after each iteration
-    onIterationComplete: async (context) => {
-      console.log(`Iteration ${context.iteration}: ${context.finishReason}`);
+  // Monitor progress after each iteration
+  onIterationComplete: async context => {
+    console.log(`Iteration ${context.iteration}: ${context.finishReason}`)
 
-      // Provide feedback to guide the agent
-      if (!context.text.includes('recommendations')) {
+    // Provide feedback to guide the agent
+    if (!context.text.includes('recommendations')) {
+      return {
+        continue: true,
+        feedback: 'Please include specific recommendations.',
+      }
+    }
+
+    return { continue: true }
+  },
+
+  // Control sub-agent delegations
+  delegation: {
+    onDelegationStart: async context => {
+      console.log(`Delegating to: ${context.primitiveId}`)
+
+      // Add extra instructions for specific agents
+      if (context.primitiveId === 'research-agent') {
         return {
-          continue: true,
-          feedback: 'Please include specific recommendations.',
-        };
+          proceed: true,
+          modifiedPrompt: `${context.prompt}\n\nFocus on 2024-2025 data.`,
+        }
       }
 
-      return { continue: true };
+      return { proceed: true }
     },
 
-    // Control sub-agent delegations
-    delegation: {
-      onDelegationStart: async (context) => {
-        console.log(`Delegating to: ${context.primitiveId}`);
+    onDelegationComplete: async context => {
+      console.log(`Completed: ${context.primitiveId}`)
 
-        // Add extra instructions for specific agents
-        if (context.primitiveId === 'research-agent') {
-          return {
-            proceed: true,
-            modifiedPrompt: `${context.prompt}\n\nFocus on 2024-2025 data.`,
-          };
-        }
-
-        return { proceed: true };
-      },
-
-      onDelegationComplete: async (context) => {
-        console.log(`Completed: ${context.primitiveId}`);
-
-        // Bail out on errors
-        if (context.error) {
-          context.bail();
-        }
-      },
-
-      // Filter what context is passed to sub-agents
-      contextFilter: ({ messages, primitiveId, prompt }) => {
-        // Filter out sensitive messages and limit to last 10
-        return messages
-          .filter(msg => {
-            const content = typeof msg.content === 'string'
-              ? msg.content
-              : JSON.stringify(msg.content);
-            // Remove sensitive data
-            return !content.includes('confidential');
-          })
-          .slice(-10); // Only pass last 10 messages
-      },
+      // Bail out on errors
+      if (context.error) {
+        context.bail()
+      }
     },
 
-    // Automatic completion validation
-    completion: {
-      scorers: [taskCompleteScorer],
-      strategy: 'all',
-      onComplete: (result) => {
-        console.log('Task complete:', result.complete);
-      },
+    // Filter what context is passed to sub-agents
+    contextFilter: ({ messages, primitiveId, prompt }) => {
+      // Filter out sensitive messages and limit to last 10
+      return messages
+        .filter(msg => {
+          const content =
+            typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)
+          // Remove sensitive data
+          return !content.includes('confidential')
+        })
+        .slice(-10) // Only pass last 10 messages
     },
-  }
-);
+  },
+
+  // Automatic completion validation
+  completion: {
+    scorers: [taskCompleteScorer],
+    strategy: 'all',
+    onComplete: result => {
+      console.log('Task complete:', result.complete)
+    },
+  },
+})
 
 // Process the stream
 for await (const chunk of stream.textStream) {
-  console.log(chunk);
+  console.log(chunk)
 }
 ```
 
 ### When to Migrate
 
 **Migrate now if you:**
+
 - Need better control over sub-agent execution
 - Want to monitor and debug multi-agent coordination
 - Need to filter context passed to sub-agents
