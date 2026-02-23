@@ -249,11 +249,6 @@ const sidebars = {
         },
         {
           type: 'doc',
-          id: 'migrations/agentnetwork-to-supervisor',
-          label: 'AgentNetwork → Supervisor Pattern',
-        },
-        {
-          type: 'doc',
           id: 'migrations/network-to-supervisor',
           label: '.network() → Supervisor Pattern',
         },

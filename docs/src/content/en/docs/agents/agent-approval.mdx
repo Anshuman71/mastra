@@ -376,18 +376,19 @@ Both approaches work with the same tool definitions. Automatic resumption trigge
 
 ## Tool approval in supervisor pattern
 
-When using the supervisor pattern (multi-agent coordination via `.stream()` or `.generate()`), tool approvals properly propagate through the delegation chain. This means when a supervisor agent delegates to a subagent that uses a tool requiring approval, the approval request surfaces to the supervisor level where it can be handled.
+The [supervisor pattern](/docs/agents/networks) lets a supervisor agent coordinate multiple subagents using `.stream()` or `.generate()`. The supervisor delegates tasks to subagents, which may use tools that require approval. When this happens, tool approvals properly propagate through the delegation chain -- the approval request surfaces at the supervisor level where you can handle it, regardless of which subagent triggered it.
 
 ### How it works
 
-1. Supervisor delegates to subagent
-1. subagent calls a tool with `requireApproval: true` or `suspend()`
-1. Approval request bubbles up through delegation chain
-1. You handle the approval at the supervisor level
-1. Approval/decline propagates back down to the subagent
-1. subagent continues or terminates based on approval decision
+1. The supervisor agent delegates a task to a subagent.
+1. The subagent calls a tool that has `requireApproval: true` or uses `suspend()`.
+1. The approval request bubbles up through the delegation chain to the supervisor.
+1. You handle the approval or decline at the supervisor level.
+1. The decision propagates back down to the subagent, which continues or terminates accordingly.
 
 ### Example
+
+The following example creates a subagent with a database lookup tool that requires approval. The supervisor delegates to this subagent, and when the tool triggers an approval request, it surfaces in the supervisor's stream as a `tool-call-approval` chunk. You then approve the tool call using `approveToolCall` with the stream's `runId`.
 
 ```typescript
 import { Agent } from '@mastra/core/agent'
@@ -458,7 +459,7 @@ for await (const chunk of stream.fullStream) {
 
 ### Declining tool calls in supervisor pattern
 
-You can also decline tool calls at the supervisor level:
+You can also decline tool calls at the supervisor level by calling [`declineToolCall`](/reference/streaming/agents/stream). The supervisor will respond acknowledging the declined tool without executing it:
 
 ```typescript
 for await (const chunk of stream.fullStream) {
@@ -481,7 +482,7 @@ for await (const chunk of stream.fullStream) {
 
 ### Using suspend() in supervisor pattern
 
-The `suspend()` approach also works through the supervisor delegation chain:
+Tools can also use [`suspend()`](#tool-approval-using-suspend) to pause execution and return context to the user. This approach works through the supervisor delegation chain the same way `requireApproval` does -- the suspension surfaces at the supervisor level:
 
 ```typescript
 const conditionalTool = createTool({
@@ -552,20 +553,7 @@ if (output.finishReason === 'suspended') {
 
 ### Multi-level delegation
 
-Tool approvals propagate through multiple levels of delegation:
-
-```
-User Request
-  → Supervisor Agent
-    → subagent A
-      → subagent B (has tool with requireApproval: true)
-        → Tool requires approval
-      ← Approval bubbles up to supervisor level
-    ← You handle approval/decline at supervisor
-  ← Result flows back through delegation chain
-```
-
-The approval request will surface at the top-level supervisor, regardless of how deep the delegation chain goes.
+Tool approvals propagate through multiple levels of delegation. For example, if a supervisor delegates to subagent A, which in turn delegates to subagent B that has a tool with `requireApproval: true`, the approval request still surfaces at the top-level supervisor. You handle the approval or decline there, and the result flows back down through the entire delegation chain to the tool that requested it.
 
 ## Related
 
