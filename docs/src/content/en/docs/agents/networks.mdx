@@ -520,7 +520,7 @@ The supervisor pattern provides a modern, more powerful alternative to `.network
 | **API** | Separate `.network()` method | Uses existing `stream()` / `generate()` methods |
 | **Progress Monitoring** | Limited event streaming | `onIterationComplete` hook with full context |
 | **Delegation Control** | No control over delegations | `onDelegationStart` to modify/reject delegations |
-| **Error Handling** | Basic error events | `onDelegationComplete` with bail mechanism |
+| **Error Handling** | Basic error events | `onDelegationComplete` with bail and feedback mechanism |
 | **Context Filtering** | All context passed to sub-agents | `contextFilter` to control what context is shared |
 | **Memory Isolation** | No control | Full context forwarded, scoped memory saves |
 | **Tool Approval** | Not propagated to sub-agents | Full propagation through delegation chain |
@@ -624,9 +624,12 @@ const stream = await supervisorAgent.stream('Research AI in education', {
     onDelegationComplete: async context => {
       console.log(`Completed: ${context.primitiveId}`)
 
-      // Bail out on errors
+      // Handle errors: bail to stop execution and provide feedback
       if (context.error) {
-        context.bail()
+        context.bail() // Stop further delegations
+        return {
+          feedback: `Delegation to ${context.primitiveId} failed: ${context.error}. Try a different approach.`,
+        }
       }
     },
 

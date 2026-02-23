@@ -10,6 +10,7 @@ The `AgentNetwork` and `NewAgentNetwork` primitives can be migrated to the **sup
 :::tip[Why Supervisor Pattern?]
 
 The supervisor pattern provides:
+
 - **Better control** - Delegation hooks, iteration hooks, and completion scoring
 - **More flexible** - Modify delegations, filter context, provide feedback
 - **Type-safe** - Full TypeScript support for all hooks and callbacks
@@ -34,48 +35,47 @@ Memory is required for the supervisor pattern to track conversation history and 
 **Before:**
 
 ```typescript
-import { AgentNetwork } from "@mastra/core/network";
+import { AgentNetwork } from '@mastra/core/network'
 
 const agent = new AgentNetwork({
-  name: "agent-network",
+  name: 'agent-network',
   agents: [agent1, agent2],
   tools: { tool1, tool2 },
-  model: "openai/gpt-5.1",
-  instructions:
-    "You are a network agent that can help users with a variety of tasks.",
-});
+  model: 'openai/gpt-5.1',
+  instructions: 'You are a network agent that can help users with a variety of tasks.',
+})
 
-await agent.stream("Find me the weather in Tokyo.");
+await agent.stream('Find me the weather in Tokyo.')
 ```
 
 **After (Supervisor Pattern):**
 
 ```typescript
-import { Agent } from "@mastra/core/agent";
-import { Memory } from "@mastra/memory";
+import { Agent } from '@mastra/core/agent'
+import { Memory } from '@mastra/memory'
 
-const memory = new Memory();
+const memory = new Memory()
 
 // Define your sub-agents with clear, specific descriptions
 const agent1 = new Agent({
-  id: "weather-specialist",
-  name: "Weather Specialist",
-  description: "Specializes in retrieving current weather information for any location worldwide.",
-  model: "openai/gpt-4o-mini",
+  id: 'weather-specialist',
+  name: 'Weather Specialist',
+  description: 'Specializes in retrieving current weather information for any location worldwide.',
+  model: 'openai/gpt-4o-mini',
   tools: { weatherTool },
-});
+})
 
 const agent2 = new Agent({
-  id: "travel-advisor",
-  name: "Travel Advisor",
-  description: "Provides travel recommendations based on weather conditions and user preferences.",
-  model: "openai/gpt-4o-mini",
-});
+  id: 'travel-advisor',
+  name: 'Travel Advisor',
+  description: 'Provides travel recommendations based on weather conditions and user preferences.',
+  model: 'openai/gpt-4o-mini',
+})
 
 // Create supervisor agent
 const supervisorAgent = new Agent({
-  id: "supervisor",
-  name: "Travel Supervisor",
+  id: 'supervisor',
+  name: 'Travel Supervisor',
   // Clear, specific instructions help the supervisor make better delegation decisions
   instructions: `You coordinate weather and travel information tasks.
 
@@ -84,33 +84,33 @@ const supervisorAgent = new Agent({
     For complex requests requiring both, delegate to both agents in sequence.
 
     Always ensure you have complete information before responding to the user.`,
-  model: "openai/gpt-5.1",
+  model: 'openai/gpt-5.1',
   agents: { agent1, agent2 },
   tools: { tool1, tool2 },
   memory,
-});
+})
 
 // Use .stream() with supervisor options
-const stream = await supervisorAgent.stream("Find me the weather in Tokyo.", {
+const stream = await supervisorAgent.stream('Find me the weather in Tokyo.', {
   maxSteps: 10,
 
   // Monitor progress
-  onIterationComplete: async (context) => {
-    console.log(`Iteration ${context.iteration}: ${context.finishReason}`);
-    return { continue: true };
+  onIterationComplete: async context => {
+    console.log(`Iteration ${context.iteration}: ${context.finishReason}`)
+    return { continue: true }
   },
 
   // Control delegations
   delegation: {
-    onDelegationStart: async (context) => {
-      console.log(`Delegating to: ${context.primitiveId}`);
-      return { proceed: true };
+    onDelegationStart: async context => {
+      console.log(`Delegating to: ${context.primitiveId}`)
+      return { proceed: true }
     },
   },
-});
+})
 
 for await (const chunk of stream.textStream) {
-  process.stdout.write(chunk);
+  process.stdout.write(chunk)
 }
 ```
 
@@ -119,33 +119,32 @@ for await (const chunk of stream.textStream) {
 **Before:**
 
 ```typescript
-import { NewAgentNetwork } from "@mastra/core/network/vnext";
+import { NewAgentNetwork } from '@mastra/core/network/vnext'
 
 const agent = new NewAgentNetwork({
-  id: "agent-network",
-  name: "agent-network",
+  id: 'agent-network',
+  name: 'agent-network',
   agents: { agent1, agent2 },
   workflows: { workflow1 },
   tools: { tool1, tool2 },
-  model: "openai/gpt-5.1",
-  instructions:
-    "You are a network agent that can help users with a variety of tasks.",
-});
+  model: 'openai/gpt-5.1',
+  instructions: 'You are a network agent that can help users with a variety of tasks.',
+})
 
-await agent.loop("Find me the weather in Tokyo.");
+await agent.loop('Find me the weather in Tokyo.')
 ```
 
 **After (Supervisor Pattern):**
 
 ```typescript
-import { Agent } from "@mastra/core/agent";
-import { Memory } from "@mastra/memory";
+import { Agent } from '@mastra/core/agent'
+import { Memory } from '@mastra/memory'
 
-const memory = new Memory();
+const memory = new Memory()
 
 const supervisorAgent = new Agent({
-  id: "supervisor",
-  name: "Task Supervisor",
+  id: 'supervisor',
+  name: 'Task Supervisor',
   // Detailed instructions improve delegation accuracy
   instructions: `You coordinate complex tasks using specialized agents and workflows.
 
@@ -160,27 +159,27 @@ const supervisorAgent = new Agent({
     2. Delegate to the most appropriate resource
     3. Synthesize results into a coherent response
     4. Ensure all aspects of the request are addressed before responding`,
-  model: "openai/gpt-5.1",
+  model: 'openai/gpt-5.1',
   agents: { agent1, agent2 },
   workflows: { workflow1 },
   tools: { tool1, tool2 },
   memory,
-});
+})
 
-const stream = await supervisorAgent.stream("Find me the weather in Tokyo.", {
+const stream = await supervisorAgent.stream('Find me the weather in Tokyo.', {
   maxSteps: 10,
 
   delegation: {
     // Control what context is shared with sub-agents
     contextFilter: ({ messages }) => {
       // Only pass the last 10 messages
-      return messages.slice(-10);
+      return messages.slice(-10)
     },
   },
-});
+})
 
 for await (const chunk of stream.textStream) {
-  process.stdout.write(chunk);
+  process.stdout.write(chunk)
 }
 ```
 
@@ -189,9 +188,9 @@ for await (const chunk of stream.textStream) {
 **Proper prompting and clear instructions are essential for effective supervisor pattern delegation.** The LLM uses your instructions to decide:
 
 1. **When to delegate** - Does this task require a sub-agent?
-2. **Which agent to use** - Which sub-agent is best suited for this subtask?
-3. **What to pass** - What context and instructions should the sub-agent receive?
-4. **When to stop** - Is the task complete, or should it continue iterating?
+1. **Which agent to use** - Which sub-agent is best suited for this subtask?
+1. **What to pass** - What context and instructions should the sub-agent receive?
+1. **When to stop** - Is the task complete, or should it continue iterating?
 
 ### Best practices for supervisor instructions
 
@@ -199,7 +198,7 @@ for await (const chunk of stream.textStream) {
 
 ```typescript
 // ❌ Vague
-instructions: "You can use agent1 or agent2 to help users."
+instructions: 'You can use agent1 or agent2 to help users.'
 
 // ✅ Specific
 instructions: `You coordinate research and writing tasks.
@@ -241,14 +240,14 @@ Each sub-agent should have a clear `description` that helps the supervisor under
 
 ```typescript
 const researchAgent = new Agent({
-  id: "research-agent",
-  name: "Research Agent",
+  id: 'research-agent',
+  name: 'Research Agent',
   // Clear description helps supervisor make delegation decisions
   description: `Gathers concise, factual research on any topic.
     Returns bullet-point summaries with key facts and sources.
     Does not write full articles or narratives.`,
-  model: "openai/gpt-4o-mini",
-});
+  model: 'openai/gpt-4o-mini',
+})
 ```
 
 ## Advanced features
@@ -258,23 +257,23 @@ const researchAgent = new Agent({
 Monitor progress and provide feedback to guide the agent:
 
 ```typescript
-const stream = await supervisorAgent.stream("Research AI trends", {
+const stream = await supervisorAgent.stream('Research AI trends', {
   maxSteps: 10,
 
-  onIterationComplete: async (context) => {
-    console.log(`Iteration ${context.iteration}/${context.maxIterations}`);
+  onIterationComplete: async context => {
+    console.log(`Iteration ${context.iteration}/${context.maxIterations}`)
 
     // Provide feedback to guide the agent
     if (!context.text.includes('recommendations')) {
       return {
         continue: true,
         feedback: 'Please include specific recommendations in your analysis.',
-      };
+      }
     }
 
-    return { continue: true };
+    return { continue: true }
   },
-});
+})
 ```
 
 ### Delegation control
@@ -282,32 +281,35 @@ const stream = await supervisorAgent.stream("Research AI trends", {
 Control and modify sub-agent delegations:
 
 ```typescript
-const stream = await supervisorAgent.stream("Research AI trends", {
+const stream = await supervisorAgent.stream('Research AI trends', {
   maxSteps: 10,
 
   delegation: {
-    onDelegationStart: async (context) => {
+    onDelegationStart: async context => {
       // Add extra instructions for specific agents
       if (context.primitiveId === 'research-agent') {
         return {
           proceed: true,
           modifiedPrompt: `${context.prompt}\n\nFocus on 2024-2025 data.`,
           modifiedMaxSteps: 5,
-        };
+        }
       }
 
-      return { proceed: true };
+      return { proceed: true }
     },
 
-    onDelegationComplete: async (context) => {
-      // Bail out on errors
+    onDelegationComplete: async context => {
+      // Handle errors: bail to stop execution and provide feedback
       if (context.error) {
-        console.error('Delegation failed:', context.error);
-        context.bail();
+        console.error('Delegation failed:', context.error)
+        context.bail() // Stop further delegations
+        return {
+          feedback: `Delegation to ${context.primitiveId} failed: ${context.error}. Try a different approach.`,
+        }
       }
     },
   },
-});
+})
 ```
 
 ### Completion scoring
@@ -315,27 +317,27 @@ const stream = await supervisorAgent.stream("Research AI trends", {
 Automatically validate task completion:
 
 ```typescript
-import { createScorer } from '@mastra/core/evals';
+import { createScorer } from '@mastra/core/evals'
 
 const taskCompleteScorer = createScorer({
   id: 'task-complete',
   name: 'Task Completeness',
-}).generateScore(async (context) => {
-  const text = (context.run.output || '').toString();
-  return text.includes('recommendation') ? 1 : 0;
-});
+}).generateScore(async context => {
+  const text = (context.run.output || '').toString()
+  return text.includes('recommendation') ? 1 : 0
+})
 
-const stream = await supervisorAgent.stream("Research AI trends", {
+const stream = await supervisorAgent.stream('Research AI trends', {
   maxSteps: 10,
 
   completion: {
     scorers: [taskCompleteScorer],
     strategy: 'all',
-    onComplete: (result) => {
-      console.log('Task complete:', result.complete);
+    onComplete: result => {
+      console.log('Task complete:', result.complete)
     },
   },
-});
+})
 ```
 
 ## Migration checklist
