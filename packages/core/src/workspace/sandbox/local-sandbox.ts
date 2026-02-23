@@ -13,7 +13,10 @@ import * as crypto from 'node:crypto';
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import type { RequestContext } from '../../request-context';
 import type { ProviderStatus } from '../lifecycle';
+import type { InstructionsOption } from '../types';
+import { resolveInstructions } from '../utils';
 import { IsolationUnavailableError } from './errors';
 import { LocalProcessManager } from './local-process-manager';
 import { MastraSandbox } from './mastra-sandbox';
@@ -69,6 +72,16 @@ export interface LocalSandboxOptions extends MastraSandboxOptions {
    * Only used when isolation is 'seatbelt' or 'bwrap'.
    */
   nativeSandbox?: NativeSandboxConfig;
+  /**
+   * Custom instructions that override the default instructions
+   * returned by `getInstructions()`.
+   *
+   * - `string` — Fully replaces the default instructions.
+   *   Pass an empty string to suppress instructions entirely.
+   * - `(opts) => string` — Receives the default instructions and
+   *   optional request context so you can extend or customise per-request.
+   */
+  instructions?: InstructionsOption;
 }
 
 /**
@@ -107,6 +120,7 @@ export class LocalSandbox extends MastraSandbox {
   private _sandboxFolderPath?: string;
   private _userProvidedProfilePath = false;
   private readonly _createdAt: Date;
+  private readonly _instructionsOverride?: InstructionsOption;
 
   constructor(options: LocalSandboxOptions = {}) {
     // Validate isolation backend before super (fail fast)
@@ -128,6 +142,7 @@ export class LocalSandbox extends MastraSandbox {
     this.env = options.env ?? {};
     this._nativeSandboxConfig = options.nativeSandbox ?? {};
     this.isolation = requestedIsolation;
+    this._instructionsOverride = options.instructions;
   }
 
   // ---------------------------------------------------------------------------
@@ -270,11 +285,12 @@ export class LocalSandbox extends MastraSandbox {
     };
   }
 
-  getInstructions(): string {
-    if (this.workingDirectory) {
-      return `Local command execution. Working directory: "${this.workingDirectory}".`;
-    }
-    return 'Local command execution on the host machine.';
+  getInstructions(opts?: { requestContext?: RequestContext }): string {
+    return resolveInstructions(this._instructionsOverride, () => this._getDefaultInstructions(), opts?.requestContext);
+  }
+
+  private _getDefaultInstructions(): string {
+    return `Local command execution. Working directory: "${this.workingDirectory}".`;
   }
 
   // ---------------------------------------------------------------------------

@@ -258,16 +258,7 @@ export function createWorkspaceTools(workspace: Workspace) {
     if (workspace.sandbox.executeCommand && executeCommandConfig.enabled) {
       // Pick the right tool variant based on whether processes are available
       const baseTool = workspace.sandbox.processes ? executeCommandWithBackgroundTool : executeCommandTool;
-
-      // Inject dynamic path context into description
-      const pathContext = workspace.getPathContext();
-      const pathInfo = pathContext.instructions ? `\n\n${pathContext.instructions}` : '';
-      const description = pathInfo ? `${baseTool.description}${pathInfo}` : baseTool.description;
-
-      tools[WORKSPACE_TOOLS.SANDBOX.EXECUTE_COMMAND] = {
-        ...wrapTool(baseTool, workspace, executeCommandConfig),
-        description,
-      };
+      tools[WORKSPACE_TOOLS.SANDBOX.EXECUTE_COMMAND] = wrapTool(baseTool, workspace, executeCommandConfig);
     }
 
     // Background process tools (only when process manager is available)

@@ -7,6 +7,7 @@
  * @see https://e2b.dev/docs
  */
 
+import type { RequestContext } from '@mastra/core/di';
 import type {
   SandboxInfo,
   WorkspaceFilesystem,
@@ -16,6 +17,11 @@ import type {
   MountManager,
   MastraSandboxOptions,
 } from '@mastra/core/workspace';
+
+/**
+ * Inlined from `@mastra/core/workspace` to avoid requiring a newer core peer dep.
+ */
+type InstructionsOption = string | ((opts: { defaultInstructions: string; requestContext?: RequestContext }) => string);
 import { MastraSandbox, SandboxNotReadyError } from '@mastra/core/workspace';
 import { Sandbox, Template } from 'e2b';
 import type { TemplateBuilder, TemplateClass } from 'e2b';
@@ -80,6 +86,16 @@ export interface E2BSandboxOptions extends MastraSandboxOptions {
   apiKey?: string;
   /** Access token for authentication. Falls back to E2B_ACCESS_TOKEN env var. */
   accessToken?: string;
+  /**
+   * Custom instructions that override the default instructions
+   * returned by `getInstructions()`.
+   *
+   * - `string` — Fully replaces the default instructions.
+   *   Pass an empty string to suppress instructions entirely.
+   * - `(opts) => string` — Receives the default instructions and
+   *   optional request context so you can extend or customise per-request.
+   */
+  instructions?: InstructionsOption;
 }
 
 // =============================================================================
@@ -142,6 +158,7 @@ export class E2BSandbox extends MastraSandbox {
   private readonly env: Record<string, string>;
   private readonly metadata: Record<string, unknown>;
   private readonly connectionOpts: Record<string, string>;
+  private readonly _instructionsOverride?: InstructionsOption;
 
   /** Resolved template ID after building (if needed) */
   private _resolvedTemplateId?: string;
@@ -167,6 +184,8 @@ export class E2BSandbox extends MastraSandbox {
       ...(options.apiKey && { apiKey: options.apiKey }),
       ...(options.accessToken && { accessToken: options.accessToken }),
     };
+
+    this._instructionsOverride = options.instructions;
 
     // Start template preparation immediately in background
     // This way template build (if needed) begins before start() is called
@@ -371,7 +390,18 @@ export class E2BSandbox extends MastraSandbox {
     };
   }
 
-  getInstructions(): string {
+  /**
+   * Get instructions describing this E2B sandbox.
+   * Used by agents to understand the execution environment.
+   */
+  getInstructions(opts?: { requestContext?: RequestContext }): string {
+    if (this._instructionsOverride === undefined) return this._getDefaultInstructions();
+    if (typeof this._instructionsOverride === 'string') return this._instructionsOverride;
+    const defaultInstructions = this._getDefaultInstructions();
+    return this._instructionsOverride({ defaultInstructions, requestContext: opts?.requestContext });
+  }
+
+  private _getDefaultInstructions(): string {
     const mountCount = this.mounts.entries.size;
     const mountInfo = mountCount > 0 ? ` ${mountCount} filesystem(s) mounted via FUSE.` : '';
     return `Cloud sandbox with /home/user as working directory.${mountInfo}`;
