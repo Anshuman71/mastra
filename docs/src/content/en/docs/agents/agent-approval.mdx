@@ -376,16 +376,16 @@ Both approaches work with the same tool definitions. Automatic resumption trigge
 
 ## Tool approval in supervisor pattern
 
-When using the supervisor pattern (multi-agent coordination via `.stream()` or `.generate()`), tool approvals properly propagate through the delegation chain. This means when a supervisor agent delegates to a sub-agent that uses a tool requiring approval, the approval request surfaces to the supervisor level where it can be handled.
+When using the supervisor pattern (multi-agent coordination via `.stream()` or `.generate()`), tool approvals properly propagate through the delegation chain. This means when a supervisor agent delegates to a subagent that uses a tool requiring approval, the approval request surfaces to the supervisor level where it can be handled.
 
 ### How it works
 
-1. Supervisor delegates to sub-agent
-1. Sub-agent calls a tool with `requireApproval: true` or `suspend()`
+1. Supervisor delegates to subagent
+1. subagent calls a tool with `requireApproval: true` or `suspend()`
 1. Approval request bubbles up through delegation chain
 1. You handle the approval at the supervisor level
-1. Approval/decline propagates back down to the sub-agent
-1. Sub-agent continues or terminates based on approval decision
+1. Approval/decline propagates back down to the subagent
+1. subagent continues or terminates based on approval decision
 
 ### Example
 
@@ -395,7 +395,7 @@ import { createTool } from '@mastra/core/tools'
 import { Memory } from '@mastra/memory'
 import { z } from 'zod'
 
-// Sub-agent with approval-required tool
+// subagent with approval-required tool
 const findUserTool = createTool({
   id: 'find-user',
   description: 'Finds user by ID in the database',
@@ -510,7 +510,7 @@ const conditionalTool = createTool({
   },
 })
 
-// When using this tool through a sub-agent in supervisor pattern
+// When using this tool through a subagent in supervisor pattern
 for await (const chunk of stream.fullStream) {
   if (chunk.type === 'tool-call-suspended') {
     console.log('Tool suspended:', chunk.payload.suspendPayload.message)
@@ -557,8 +557,8 @@ Tool approvals propagate through multiple levels of delegation:
 ```
 User Request
   → Supervisor Agent
-    → Sub-Agent A
-      → Sub-Agent B (has tool with requireApproval: true)
+    → subagent A
+      → subagent B (has tool with requireApproval: true)
         → Tool requires approval
       ← Approval bubbles up to supervisor level
     ← You handle approval/decline at supervisor

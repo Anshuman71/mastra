@@ -307,12 +307,12 @@ When using the supervisor pattern with `.stream()` or `.generate()`, several adv
 
 ### Memory isolation with full context forwarding
 
-The supervisor pattern implements **memory isolation** - sub-agents receive the full conversation context for better decision-making, but only their specific delegation prompt and response are saved to their memory.
+The supervisor pattern implements **memory isolation** - subagents receive the full conversation context for better decision-making, but only their specific delegation prompt and response are saved to their memory.
 
 **How it works:**
 
-1. **Full context forwarded** - When the supervisor delegates to a sub-agent, the sub-agent receives ALL messages from the supervisor's conversation (user messages, assistant responses, completion feedback, tool results)
-1. **Scoped memory saves** - Only the delegation prompt and the sub-agent's response are saved to the sub-agent's memory
+1. **Full context forwarded** - When the supervisor delegates to a subagent, the subagent receives ALL messages from the supervisor's conversation (user messages, assistant responses, completion feedback, tool results)
+1. **Scoped memory saves** - Only the delegation prompt and the subagent's response are saved to the subagent's memory
 1. **Fresh thread per invocation** - Each delegation uses a unique thread ID, ensuring clean separation
 
 **Example:**
@@ -327,25 +327,25 @@ The supervisor pattern implements **memory isolation** - sub-agents receive the 
 
 const stream = await supervisorAgent.stream('What is my name and where do I live?')
 
-// When supervisor delegates to a sub-agent:
-// ✅ Sub-agent receives all 5 messages above (full context)
-// ✅ Sub-agent can reference "Alice" and "Paris" in its response
-// ✅ Only the delegation prompt + response saved to sub-agent memory
-// ✅ Sub-agent memory stays clean, not polluted with supervisor history
+// When supervisor delegates to a subagent:
+// ✅ subagent receives all 5 messages above (full context)
+// ✅ subagent can reference "Alice" and "Paris" in its response
+// ✅ Only the delegation prompt + response saved to subagent memory
+// ✅ subagent memory stays clean, not polluted with supervisor history
 ```
 
-This ensures sub-agents have the context they need to make informed decisions without cluttering their memory with the entire supervisor conversation.
+This ensures subagents have the context they need to make informed decisions without cluttering their memory with the entire supervisor conversation.
 
 ### Tool approval propagation
 
-Tool approvals properly propagate through the supervisor delegation chain. When a sub-agent uses a tool with `requireApproval: true` or calls `suspend()`, the approval request surfaces to the supervisor level where it can be handled.
+Tool approvals properly propagate through the supervisor delegation chain. When a subagent uses a tool with `requireApproval: true` or calls `suspend()`, the approval request surfaces to the supervisor level where it can be handled.
 
 **Example:**
 
 ```typescript
 import { createTool } from '@mastra/core/tools'
 
-// Sub-agent with approval-required tool
+// subagent with approval-required tool
 const sensitiveDataTool = createTool({
   id: 'get-user-data',
   requireApproval: true,
@@ -390,7 +390,7 @@ The approval request bubbles up through the delegation chain, allowing you to ha
 
 ### Completion feedback visibility
 
-When using completion scorers (for task validation), the completion feedback is automatically included in the conversation context passed to sub-agents on subsequent iterations. This allows sub-agents to see what validation failed and adjust their responses accordingly.
+When using completion scorers (for task validation), the completion feedback is automatically included in the conversation context passed to subagents on subsequent iterations. This allows subagents to see what validation failed and adjust their responses accordingly.
 
 **Example:**
 
@@ -413,22 +413,22 @@ const stream = await supervisorAgent.stream('Research AI trends', {
   },
 })
 
-// First iteration: Sub-agent responds without recommendations
+// First iteration: subagent responds without recommendations
 // Completion check runs: FAIL (missing recommendations)
 // Completion feedback added to messages: "Task not complete. Missing: recommendation"
 
-// Second iteration: Sub-agent receives:
+// Second iteration: subagent receives:
 //   - Original user message
 //   - Previous response
 //   - Completion feedback (visible!)
 //   - Can now provide recommendations to pass validation
 ```
 
-This creates a feedback loop where sub-agents can learn from validation failures and improve their responses.
+This creates a feedback loop where subagents can learn from validation failures and improve their responses.
 
 ### The critical role of clear instructions
 
-**Proper prompting and clear instructions are essential for effective supervisor pattern coordination.** The LLM uses your instructions and sub-agent descriptions to make critical delegation decisions.
+**Proper prompting and clear instructions are essential for effective supervisor pattern coordination.** The LLM uses your instructions and subagent descriptions to make critical delegation decisions.
 
 #### What the supervisor agent needs
 
@@ -477,9 +477,9 @@ Only respond to the user when you're confident the task is complete.`,
 })
 ```
 
-#### What sub-agents need
+#### What subagents need
 
-Each sub-agent should have a clear `description` that helps the supervisor understand when and how to use it:
+Each subagent should have a clear `description` that helps the supervisor understand when and how to use it:
 
 **❌ Vague description:**
 
@@ -521,10 +521,10 @@ The supervisor pattern provides a modern, more powerful alternative to `.network
 | **Progress Monitoring** | Limited event streaming | `onIterationComplete` hook with full context |
 | **Delegation Control** | No control over delegations | `onDelegationStart` to modify/reject delegations |
 | **Error Handling** | Basic error events | `onDelegationComplete` with bail and feedback mechanism |
-| **Context Filtering** | All context passed to sub-agents | `contextFilter` to control what context is shared |
+| **Context Filtering** | All context passed to subagents | `contextFilter` to control what context is shared |
 | **Memory Isolation** | No control | Full context forwarded, scoped memory saves |
-| **Tool Approval** | Not propagated to sub-agents | Full propagation through delegation chain |
-| **Completion Feedback** | Not visible to sub-agents | Visible in sub-agent context for self-correction |
+| **Tool Approval** | Not propagated to subagents | Full propagation through delegation chain |
+| **Completion Feedback** | Not visible to subagents | Visible in subagent context for self-correction |
 | **Task Completion** | Manual detection only | `completion` scorers with automatic validation |
 | **Early Stopping** | Not available | Return `{ continue: false }` from iteration hook |
 | **Feedback Loop** | Not available | Provide feedback to guide next iteration |
@@ -605,7 +605,7 @@ const stream = await supervisorAgent.stream('Research AI in education', {
     return { continue: true }
   },
 
-  // Control sub-agent delegations
+  // Control subagent delegations
   delegation: {
     onDelegationStart: async context => {
       console.log(`Delegating to: ${context.primitiveId}`)
@@ -633,7 +633,7 @@ const stream = await supervisorAgent.stream('Research AI in education', {
       }
     },
 
-    // Filter what context is passed to sub-agents
+    // Filter what context is passed to subagents
     contextFilter: ({ messages, primitiveId, prompt }) => {
       // Filter out sensitive messages and limit to last 10
       return messages
@@ -667,9 +667,9 @@ for await (const chunk of stream.textStream) {
 
 **Migrate now if you:**
 
-- Need better control over sub-agent execution
+- Need better control over subagent execution
 - Want to monitor and debug multi-agent coordination
-- Need to filter context passed to sub-agents
+- Need to filter context passed to subagents
 - Prefer type-safe hooks and callbacks
 
 **Migrate as soon as possible:**
@@ -679,11 +679,11 @@ for await (const chunk of stream.textStream) {
 
 - [ ] Update agent configuration (same structure, no changes needed)
 - [ ] **Review and improve supervisor agent `instructions` for clarity and specificity**
-- [ ] **Add clear `description` fields to all sub-agents**
+- [ ] **Add clear `description` fields to all subagents**
 - [ ] Replace `.network()` calls with `.stream()` or `.generate()`
 - [ ] Add `maxSteps` option to limit iterations
 - [ ] (Optional) Add `onIterationComplete` for progress monitoring
-- [ ] (Optional) Add `delegation` hooks for sub-agent control
+- [ ] (Optional) Add `delegation` hooks for subagent control
 - [ ] (Optional) Add `completion` scorers for automatic validation
 - [ ] (Optional) Add `contextFilter` to control context sharing
 - [ ] Update event handling from network events to stream chunks

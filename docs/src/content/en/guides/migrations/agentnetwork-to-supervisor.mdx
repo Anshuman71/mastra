@@ -56,7 +56,7 @@ import { Memory } from '@mastra/memory'
 
 const memory = new Memory()
 
-// Define your sub-agents with clear, specific descriptions
+// Define your subagents with clear, specific descriptions
 const agent1 = new Agent({
   id: 'weather-specialist',
   name: 'Weather Specialist',
@@ -170,7 +170,7 @@ const stream = await supervisorAgent.stream('Find me the weather in Tokyo.', {
   maxSteps: 10,
 
   delegation: {
-    // Control what context is shared with sub-agents
+    // Control what context is shared with subagents
     contextFilter: ({ messages }) => {
       // Only pass the last 10 messages
       return messages.slice(-10)
@@ -187,14 +187,14 @@ for await (const chunk of stream.textStream) {
 
 **Proper prompting and clear instructions are essential for effective supervisor pattern delegation.** The LLM uses your instructions to decide:
 
-1. **When to delegate** - Does this task require a sub-agent?
-1. **Which agent to use** - Which sub-agent is best suited for this subtask?
-1. **What to pass** - What context and instructions should the sub-agent receive?
+1. **When to delegate** - Does this task require a subagent?
+1. **Which agent to use** - Which subagent is best suited for this subtask?
+1. **What to pass** - What context and instructions should the subagent receive?
 1. **When to stop** - Is the task complete, or should it continue iterating?
 
 ### Best practices for supervisor instructions
 
-**Be specific about each sub-agent's role:**
+**Be specific about each subagent's role:**
 
 ```typescript
 // ❌ Vague
@@ -234,9 +234,9 @@ Delegation strategy:
 - For budget analysis: Delegate to finance-workflow`
 ```
 
-### Sub-agent descriptions matter too
+### subagent descriptions matter too
 
-Each sub-agent should have a clear `description` that helps the supervisor understand when to use it:
+Each subagent should have a clear `description` that helps the supervisor understand when to use it:
 
 ```typescript
 const researchAgent = new Agent({
@@ -278,7 +278,7 @@ const stream = await supervisorAgent.stream('Research AI trends', {
 
 ### Delegation control
 
-Control and modify sub-agent delegations:
+Control and modify subagent delegations:
 
 ```typescript
 const stream = await supervisorAgent.stream('Research AI trends', {
@@ -346,11 +346,11 @@ const stream = await supervisorAgent.stream('Research AI trends', {
 - [ ] Replace `AgentNetwork` / `NewAgentNetwork` imports with `Agent`
 - [ ] Configure memory on the supervisor agent
 - [ ] **Write clear, specific instructions for the supervisor agent**
-- [ ] **Add descriptive `description` fields to all sub-agents**
+- [ ] **Add descriptive `description` fields to all subagents**
 - [ ] Replace `.stream()` / `.loop()` calls with `agent.stream()`
 - [ ] Add `maxSteps` option to limit iterations
 - [ ] (Optional) Add `onIterationComplete` for progress monitoring
-- [ ] (Optional) Add `delegation` hooks for sub-agent control
+- [ ] (Optional) Add `delegation` hooks for subagent control
 - [ ] (Optional) Add `completion` scorers for automatic validation
 - [ ] (Optional) Add `contextFilter` to control context sharing
 - [ ] Update event handling from network events to stream chunks

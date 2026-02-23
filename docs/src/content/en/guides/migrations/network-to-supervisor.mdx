@@ -23,13 +23,13 @@ The supervisor pattern provides significant improvements over `.network()`:
 | **Progress Monitoring** | Limited event streaming | `onIterationComplete` hook with full context |
 | **Delegation Control** | No control over delegations | `onDelegationStart` to modify/reject delegations |
 | **Error Handling** | Basic error events | `onDelegationComplete` with bail and feedback mechanism |
-| **Context Filtering** | All context passed to sub-agents | `contextFilter` to control what context is shared |
+| **Context Filtering** | All context passed to subagents | `contextFilter` to control what context is shared |
 | **Task Completion** | Manual completion detection | `completion` scorers with automatic validation |
 | **Early Stopping** | Not available | Return `{ continue: false }` from iteration hook |
 | **Feedback Loop** | Not available | Provide feedback to guide next iteration |
 | **TypeScript Support** | Basic types | Full type safety for all hooks and callbacks |
 | **Memory Isolation** | No control | Full context forwarded, scoped memory saves |
-| **Tool Approval** | Not propagated to sub-agents | Full propagation through delegation chain |
+| **Tool Approval** | Not propagated to subagents | Full propagation through delegation chain |
 
 ## Basic migration
 
@@ -142,14 +142,14 @@ const stream = await supervisorAgent.stream('Research AI in education', {
 
 ### Delegation control
 
-Control and modify sub-agent delegations:
+Control and modify subagent delegations:
 
 ```typescript
 const stream = await supervisorAgent.stream('Research AI in education', {
   maxSteps: 10,
 
   delegation: {
-    // Called before delegating to a sub-agent or workflow
+    // Called before delegating to a subagent or workflow
     onDelegationStart: async context => {
       console.log(`About to delegate to: ${context.primitiveId}`)
       console.log(`Prompt: ${context.prompt}`)
@@ -197,14 +197,14 @@ const stream = await supervisorAgent.stream('Research AI in education', {
 
 ### Context filtering
 
-Control what conversation context is shared with sub-agents:
+Control what conversation context is shared with subagents:
 
 ```typescript
 const stream = await supervisorAgent.stream('Research AI in education', {
   maxSteps: 10,
 
   delegation: {
-    // Filter context passed to sub-agents
+    // Filter context passed to subagents
     contextFilter: ({ messages, primitiveId, prompt }) => {
       // Custom filter: remove sensitive information and limit to last 10 messages
       return messages
@@ -264,7 +264,7 @@ const stream = await supervisorAgent.stream('Research AI in education', {
 
 ## Memory isolation and context forwarding
 
-One key improvement in the supervisor pattern is **memory isolation** - sub-agents receive the full conversation context for better decision-making, but only their specific delegation prompt and response are saved to their memory.
+One key improvement in the supervisor pattern is **memory isolation** - subagents receive the full conversation context for better decision-making, but only their specific delegation prompt and response are saved to their memory.
 
 ### How it works
 
@@ -278,21 +278,21 @@ One key improvement in the supervisor pattern is **memory isolation** - sub-agen
 
 // When supervisor delegates to researchAgent:
 // ✅ Full context is forwarded (all 5 messages above)
-// ✅ Sub-agent can see "Alice" and "Paris" in conversation
-// ✅ Only delegation prompt + response saved to sub-agent memory
-// ✅ Sub-agent memory stays clean, not polluted with supervisor context
+// ✅ subagent can see "Alice" and "Paris" in conversation
+// ✅ Only delegation prompt + response saved to subagent memory
+// ✅ subagent memory stays clean, not polluted with supervisor context
 
 const stream = await supervisorAgent.stream('What is my name and where do I live?', {
   maxSteps: 10,
   delegation: {
-    // Each sub-agent invocation uses a fresh unique thread
+    // Each subagent invocation uses a fresh unique thread
     // Full context is forwarded for decision-making
-    // But only the delegation is persisted to sub-agent memory
+    // But only the delegation is persisted to subagent memory
   },
 })
 ```
 
-This ensures sub-agents:
+This ensures subagents:
 
 - Have full context to make informed decisions
 - Don't accumulate the entire supervisor conversation in their memory
@@ -303,7 +303,7 @@ This ensures sub-agents:
 Tool approval now properly propagates through the supervisor delegation chain:
 
 ```typescript
-// Sub-agent with requireApproval tool
+// subagent with requireApproval tool
 const findUserTool = createTool({
   id: 'find-user',
   requireApproval: true,
@@ -432,9 +432,9 @@ Success criteria:
 If information is incomplete or uncertain, continue iterating until confident.`
 ```
 
-### Sub-agent descriptions
+### subagent descriptions
 
-Each sub-agent should also have a clear description:
+Each subagent should also have a clear description:
 
 ```typescript
 const researchAgent = new Agent({
@@ -459,7 +459,7 @@ const writingAgent = new Agent({
 - [ ] Replace `.network()` calls with `.stream()` or `.generate()`
 - [ ] Add `maxSteps` option to limit iterations
 - [ ] **Review and improve supervisor instructions for clarity**
-- [ ] **Add `description` fields to all sub-agents**
+- [ ] **Add `description` fields to all subagents**
 - [ ] Update event handling from network events to stream chunks
 - [ ] (Optional) Add `onIterationComplete` for progress monitoring
 - [ ] (Optional) Add `delegation.onDelegationStart` for delegation control

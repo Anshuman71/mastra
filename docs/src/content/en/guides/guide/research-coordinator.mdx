@@ -10,7 +10,7 @@ import StepItem from "@site/src/components/StepItem";
 
 In this guide, you'll build a research coordinator that orchestrates multiple specialized agents using the supervisor pattern. The coordinator will delegate research tasks to a research agent and writing tasks to a writing agent, then synthesize the results into a comprehensive report.
 
-You'll learn how to set up sub-agents with clear roles, configure a supervisor agent to coordinate them, use delegation hooks to control execution, and validate task completion with scorers.
+You'll learn how to set up subagents with clear roles, configure a supervisor agent to coordinate them, use delegation hooks to control execution, and validate task completion with scorers.
 
 ## Prerequisites
 
@@ -81,7 +81,7 @@ npm install @mastra/memory @mastra/libsql
 
 ## Create the supervisor agent
 
-The supervisor coordinates research and writing tasks. Its instructions define the delegation strategy - when to use each sub-agent and how to synthesize results. Memory is configured directly on the agent.
+The supervisor coordinates research and writing tasks. Its instructions define the delegation strategy - when to use each subagent and how to synthesize results. Memory is configured directly on the agent.
 
 Create a new file `src/mastra/agents/supervisor-agent.ts`:
 
@@ -165,7 +165,7 @@ Success criteria:
         }
       },
 
-      // Only pass last 10 messages to sub-agents
+      // Only pass last 10 messages to subagents
       contextFilter: ({ messages }) => {
         return messages.slice(-10)
       },

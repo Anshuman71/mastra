@@ -302,8 +302,8 @@ export const analysisAgent = new Agent({
  * This agent demonstrates all supervisor pattern features:
  * 1. Completion Scoring - Validates task completion with custom scorers
  * 2. Iteration Hooks - Monitors progress after each iteration
- * 3. Delegation Hooks - Controls sub-agent execution
- * 4. Context Filtering - Limits context passed to sub-agents
+ * 3. Delegation Hooks - Controls subagent execution
+ * 4. Context Filtering - Limits context passed to subagents
  */
 
 export const supervisorAgent = new Agent({
@@ -318,7 +318,7 @@ export const supervisorAgent = new Agent({
     3. Delegate to the analysis-agent for analyzing findings
     4. Synthesize results into a comprehensive response
 
-    Use the sub-agents effectively and iterate until the task is complete.`,
+    Use the subagents effectively and iterate until the task is complete.`,
   model: 'openai/gpt-4o-mini',
   agents: {
     researchAgent,
@@ -410,9 +410,9 @@ export const supervisorAgent = new Agent({
       return { continue: true };
     },
 
-    // Delegation Hooks - Control sub-agent execution
+    // Delegation Hooks - Control subagent execution
     delegation: {
-      // Called before delegating to a sub-agent
+      // Called before delegating to a subagent
       onDelegationStart: async context => {
         console.log(`\n${'━'.repeat(60)}`);
         console.log(`🚀 DELEGATING TO: ${context.primitiveId.toUpperCase()}`);
@@ -451,7 +451,7 @@ export const supervisorAgent = new Agent({
         return { proceed: true };
       },
 
-      // Called after sub-agent completes
+      // Called after subagent completes
       onDelegationComplete: async context => {
         console.log(`\n${'─'.repeat(60)}`);
         console.log(`✅ COMPLETED: ${context.primitiveId.toUpperCase()}`);
@@ -466,9 +466,9 @@ export const supervisorAgent = new Agent({
         }
       },
 
-      // Context Filtering - Control what context is passed to sub-agents.
+      // Context Filtering - Control what context is passed to subagents.
       // Receives the full parent message history and delegation metadata.
-      // Returns the messages to forward to the sub-agent.
+      // Returns the messages to forward to the subagent.
       contextFilter: ({ messages, primitiveId, iteration }) => {
         console.log(
           `🔍 contextFilter: preparing context for ${primitiveId} (iteration ${iteration}). messages: ${messages.length}`,
@@ -476,7 +476,7 @@ export const supervisorAgent = new Agent({
 
         return (
           messages
-            // Don't forward system messages to sub-agents
+            // Don't forward system messages to subagents
             .filter(m => m.role !== 'system')
             // Strip messages containing sensitive data
             .filter(message => {
