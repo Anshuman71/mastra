@@ -997,6 +997,11 @@ const sidebars = {
         { type: 'doc', id: 'workspace/e2b-sandbox', label: 'E2BSandbox' },
         {
           type: 'doc',
+          id: 'workspace/process-manager',
+          label: 'SandboxProcessManager',
+        },
+        {
+          type: 'doc',
           id: 'workspace/filesystem',
           label: 'WorkspaceFilesystem',
         },
