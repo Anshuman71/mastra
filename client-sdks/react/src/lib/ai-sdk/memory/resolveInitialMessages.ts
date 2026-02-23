@@ -205,7 +205,8 @@ export const resolveInitialMessages = (messages: MastraUIMessage[]): MastraUIMes
     ?.filter(message => {
       const completionModes = ['generate', 'stream', 'network'];
       if (message.role === 'assistant' && completionModes.includes(message?.metadata?.mode as string)) {
-        if ((message.metadata as MastraUIMessageMetadata)?.completionResult?.suppressFeedback) {
+        const meta = message.metadata as MastraUIMessageMetadata;
+        if (meta?.isTaskCompleteResult?.suppressFeedback || meta?.completionResult?.suppressFeedback) {
           return false;
         }
 

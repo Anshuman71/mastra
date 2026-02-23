@@ -13,7 +13,7 @@ packages:
 
 The supervisor pattern using `agent.stream()` or `agent.generate()` is now the recommended approach for coordinating multiple agents. It provides the same multi-agent coordination capabilities as `.network()` with significant improvements:
 
-- **Better control**: Iteration hooks, delegation hooks, and completion scoring give you fine-grained control over execution
+- **Better control**: Iteration hooks, delegation hooks, and task completion scoring give you fine-grained control over execution
 - **Simpler API**: Uses familiar `stream()` and `generate()` methods instead of a separate `.network()` API
 - **More flexible**: Stop execution early, modify delegations, filter context, and provide feedback to guide the agent
 - **Type-safe**: Full TypeScript support for all hooks and callbacks
@@ -388,9 +388,9 @@ for await (const chunk of stream.fullStream) {
 
 The approval request bubbles up through the delegation chain, allowing you to handle it at the supervisor level regardless of how deep the delegation goes.
 
-### Completion feedback visibility
+### Task completion feedback visibility
 
-When using completion scorers (for task validation), the completion feedback is automatically included in the conversation context passed to subagents on subsequent iterations. This allows subagents to see what validation failed and adjust their responses accordingly.
+When using task completion scorers (for task validation), the completion feedback is automatically included in the conversation context passed to subagents on subsequent iterations. This allows subagents to see what validation failed and adjust their responses accordingly.
 
 **Example:**
 
@@ -407,15 +407,15 @@ const taskCompleteScorer = createScorer({
 
 const stream = await supervisorAgent.stream('Research AI trends', {
   maxSteps: 10,
-  completion: {
+  isTaskComplete: {
     scorers: [taskCompleteScorer],
     strategy: 'all',
   },
 })
 
 // First iteration: subagent responds without recommendations
-// Completion check runs: FAIL (missing recommendations)
-// Completion feedback added to messages: "Task not complete. Missing: recommendation"
+// Task completion check runs: FAIL (missing recommendations)
+// Task completion feedback added to messages: "Task not complete. Missing: recommendation"
 
 // Second iteration: subagent receives:
 //   - Original user message

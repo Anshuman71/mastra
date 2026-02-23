@@ -329,8 +329,8 @@ export const supervisorAgent = new Agent({
   defaultOptions: {
     maxSteps: 10,
 
-    // Completion Scoring - Automatically validates task completion
-    completion: {
+    // IsTaskComplete Scoring - Automatically validates task completion
+    isTaskComplete: {
       scorers: [
         // Scorer 1: Check if research covers all key aspects
         createScorer({
@@ -469,9 +469,9 @@ export const supervisorAgent = new Agent({
       // Context Filtering - Control what context is passed to subagents.
       // Receives the full parent message history and delegation metadata.
       // Returns the messages to forward to the subagent.
-      contextFilter: ({ messages, primitiveId, iteration }) => {
+      messageFilter: ({ messages, primitiveId, iteration }) => {
         console.log(
-          `🔍 contextFilter: preparing context for ${primitiveId} (iteration ${iteration}). messages: ${messages.length}`,
+          `🔍 messageFilter: preparing context for ${primitiveId} (iteration ${iteration}). messages: ${messages.length}`,
         );
 
         return (

@@ -184,11 +184,11 @@ description: "Feedback message to guide the agent's next iteration.",
 ],
 },
 {
-name: "completion",
-type: "CompletionConfig",
+name: "isTaskComplete",
+type: "IsTaskCompleteConfig",
 isOptional: true,
 description:
-"Completion scoring configuration that validates whether the task is complete. Uses Mastra's evaluation scorers to automatically check if the agent's response satisfies the completion criteria.",
+"Task completion scoring configuration that validates whether the task is complete. Uses Mastra's evaluation scorers to automatically check if the agent's response satisfies the completion criteria.",
 properties: [
 {
 parameters: [
@@ -214,9 +214,9 @@ description: "Strategy for combining scorer results. 'all' requires all scorers 
 parameters: [
 {
 name: "onComplete",
-type: "(result: CompletionRunResult) => void | Promise<void>",
+type: "(result: IsTaskCompleteRunResult) => void | Promise<void>",
 isOptional: true,
-description: "Callback called when completion check finishes. Receives the completion result with individual scorer scores.",
+description: "Callback called when the task completion check finishes. Receives the result with individual scorer scores.",
 },
 ],
 },
@@ -274,8 +274,8 @@ description: "Called after a subagent delegation completes. The context includes
 {
 parameters: [
 {
-name: "contextFilter",
-type: "(context: ContextFilterContext) => MastraDBMessage[] | Promise<MastraDBMessage[]>",
+name: "messageFilter",
+type: "(context: MessageFilterContext) => MastraDBMessage[] | Promise<MastraDBMessage[]>",
 isOptional: true,
 description: "Callback function called before delegating to a subagent. Use this to filter the messages that are passed to the subagent.",
 },

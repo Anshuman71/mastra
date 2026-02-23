@@ -220,7 +220,7 @@ export const toUIMessage = ({ chunk, conversation, metadata }: ToUIMessageArgs):
         providerMetadata: chunk.payload.providerMetadata,
       };
 
-      // If the last message is a completion-check message, start a new assistant message
+      // If the last message is a completion/isTaskComplete result message, start a new assistant message
       if (lastMessage.metadata?.completionResult) {
         const newMessage: MastraUIMessage = {
           id: `start-${chunk.runId}-${Date.now()}`,
@@ -545,7 +545,7 @@ export const toUIMessage = ({ chunk, conversation, metadata }: ToUIMessageArgs):
       ];
     }
 
-    case 'completion-check': {
+    case 'is-task-complete': {
       if (chunk.payload.suppressFeedback) return result;
 
       const feedback = formatStreamCompletionFeedback(
@@ -559,7 +559,7 @@ export const toUIMessage = ({ chunk, conversation, metadata }: ToUIMessageArgs):
         chunk.payload.maxIterationReached,
       );
       const newMessage: MastraUIMessage = {
-        id: `completion-check-${chunk.runId + Date.now()}`,
+        id: `is-task-complete-${chunk.runId + Date.now()}`,
         role: 'assistant',
         parts: [
           {
@@ -572,7 +572,7 @@ export const toUIMessage = ({ chunk, conversation, metadata }: ToUIMessageArgs):
           completionResult: {
             passed: chunk.payload.passed,
           },
-        },
+        } as MastraUIMessageMetadata,
       };
 
       return [...result, newMessage];

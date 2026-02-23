@@ -3,7 +3,7 @@ import type { MastraScorer, MastraScorers, ScoringSamplingConfig } from '../eval
 import type { SystemMessage } from '../llm';
 import type { ProviderOptions } from '../llm/model/provider-options';
 import type { MastraLanguageModel } from '../llm/model/shared.types';
-import type { CompletionConfig } from '../loop/network/validation';
+import type { CompletionConfig, CompletionRunResult } from '../loop/network/validation';
 import type { LoopConfig, LoopOptions, PrepareStepFunction } from '../loop/types';
 import type { TracingContext, TracingOptions } from '../observability';
 import type { InputProcessorOrWorkflow, OutputProcessorOrWorkflow } from '../processors';
@@ -19,24 +19,28 @@ import type {
   MastraDBMessage,
 } from './types';
 
-// Re-export completion types for convenience
+// Re-export types for convenience
 export type { CompletionConfig, CompletionRunResult } from '../loop/network/validation';
 
+export type IsTaskCompleteConfig = CompletionConfig;
+
+export type IsTaskCompleteRunResult = CompletionRunResult;
+
 /**
- * Configuration for stream/generate completion scoring.
- * Reuses the same CompletionConfig as network for consistency.
+ * Configuration for stream/generate isTaskComplete scoring.
+ * Reuses the same IsTaskCompleteConfig as network for consistency.
  */
-export type StreamCompletionConfig = CompletionConfig;
+export type StreamIsTaskCompleteConfig = IsTaskCompleteConfig;
 
 // ============================================================================
 // Delegation Hook Types
 // ============================================================================
 
 /**
- * Context passed to the contextFilter callback.
+ * Context passed to the messageFilter callback.
  * Contains everything needed to decide which parent messages to share with the sub-agent.
  */
-export interface ContextFilterContext {
+export interface MessageFilterContext {
   /** Full unfiltered messages from the parent agent's conversation history */
   messages: MastraDBMessage[];
   /** The ID of the primitive being delegated to */
@@ -256,19 +260,19 @@ export type OnIterationCompleteHandler = (
  */
 export interface DelegationConfig {
   /**
-   * Hook called before a sub-agent or workflow tool is executed.
+   * Hook called before a subagent is executed.
    * Can reject or modify the delegation.
    */
   onDelegationStart?: OnDelegationStartHandler;
 
   /**
-   * Hook called after a sub-agent or workflow tool completes.
+   * Hook called after a subagent execution completes.
    * Can provide feedback or stop processing.
    */
   onDelegationComplete?: OnDelegationCompleteHandler;
 
   /**
-   * Callback that controls which parent messages are passed to each sub-agent as conversation
+   * Callback that controls which parent messages are passed to each subagent as conversation
    * context. Receives the full parent message history along with delegation metadata, and
    * returns the messages that should be forwarded.
    *
@@ -276,7 +280,7 @@ export interface DelegationConfig {
    *
    * @example
    * ```typescript
-   * contextFilter: ({ messages, primitiveId, prompt }) => {
+   * messageFilter: ({ messages, primitiveId, prompt }) => {
    *   // Pass only the last 5 messages, excluding tool calls
    *   return messages
    *     .filter(m => !m.content?.parts?.some(p => p.type === 'tool-invocation'))
@@ -284,7 +288,7 @@ export interface DelegationConfig {
    * }
    * ```
    */
-  contextFilter?: (context: ContextFilterContext) => MastraDBMessage[] | Promise<MastraDBMessage[]>;
+  messageFilter?: (context: MessageFilterContext) => MastraDBMessage[] | Promise<MastraDBMessage[]>;
 }
 
 /**
@@ -503,7 +507,7 @@ export type AgentExecutionOptionsBase<OUTPUT> = {
   prepareStep?: PrepareStepFunction;
 
   /**
-   * Completion scoring configuration for supervisor patterns.
+   * IsTaskComplete scoring configuration for supervisor patterns.
    * Scorers evaluate whether the task is complete after each iteration.
    *
    * When scorers fail, feedback is automatically added to the message list
@@ -522,14 +526,14 @@ export type AgentExecutionOptionsBase<OUTPUT> = {
    * });
    *
    * await supervisor.stream('Write a paper with citations', {
-   *   completion: {
+   *   isTaskComplete: {
    *     scorers: [citationScorer],
    *     strategy: 'all', // All scorers must pass
    *   },
    * });
    * ```
    */
-  completion?: StreamCompletionConfig;
+  isTaskComplete?: StreamIsTaskCompleteConfig;
 
   /** Require approval for all tool calls */
   requireToolApproval?: boolean;
@@ -571,7 +575,7 @@ export type AgentExecutionOptionsBase<OUTPUT> = {
    * ```typescript
    * await supervisor.stream('Research and code', {
    *   delegation: {
-   *     onDelegationStart: ({ primitiveId, prompt }) => {
+   *     onDelegationStart: ({ primitiveId }) => {
    *       // Reject certain delegations
    *       if (primitiveId === 'dangerous-agent') {
    *         return { proceed: false, rejectionReason: 'Not allowed' };

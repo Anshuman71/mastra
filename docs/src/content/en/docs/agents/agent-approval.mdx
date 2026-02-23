@@ -459,7 +459,7 @@ for await (const chunk of stream.fullStream) {
 
 ### Declining tool calls in supervisor pattern
 
-You can also decline tool calls at the supervisor level by calling [`declineToolCall`](/reference/streaming/agents/stream). The supervisor will respond acknowledging the declined tool without executing it:
+You can also decline tool calls at the supervisor level by calling `declineToolCall`. The supervisor will respond acknowledging the declined tool without executing it:
 
 ```typescript
 for await (const chunk of stream.fullStream) {

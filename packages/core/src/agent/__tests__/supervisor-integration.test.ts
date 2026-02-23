@@ -8,7 +8,7 @@ import { MockMemory } from '../../memory/mock';
 import { InMemoryStore } from '../../storage';
 import { createTool } from '../../tools';
 import { Agent } from '../agent';
-import type { ContextFilterContext, DelegationCompleteContext, IterationCompleteContext } from '../agent.types';
+import type { MessageFilterContext, DelegationCompleteContext, IterationCompleteContext } from '../agent.types';
 
 // Helper: create a sub-agent with a fixed text response
 function makeSubAgent(id: string, responseText: string) {
@@ -379,8 +379,8 @@ describe('Supervisor Pattern Integration Tests', () => {
       expect(receivedPrompts.some(p => p.includes('original prompt'))).toBe(false);
     });
 
-    it('should invoke contextFilter callback before delegating to a sub-agent', async () => {
-      const contextFilterSpy = vi.fn(({ messages }: ContextFilterContext) => messages.filter(m => m.role !== 'system'));
+    it('should invoke messageFilter callback before delegating to a sub-agent', async () => {
+      const messageFilterSpy = vi.fn(({ messages }: MessageFilterContext) => messages.filter(m => m.role !== 'system'));
 
       const subAgent = makeSubAgent('filter-agent', 'Filtered context response');
 
@@ -395,12 +395,12 @@ describe('Supervisor Pattern Integration Tests', () => {
 
       await supervisorAgent.generate('Task with context', {
         maxSteps: 3,
-        delegation: { contextFilter: contextFilterSpy },
+        delegation: { messageFilter: messageFilterSpy },
       });
 
-      // contextFilter should be called once for the single sub-agent delegation
-      expect(contextFilterSpy).toHaveBeenCalledTimes(1);
-      expect(contextFilterSpy).toHaveBeenCalledWith(
+      // messageFilter should be called once for the single sub-agent delegation
+      expect(messageFilterSpy).toHaveBeenCalledTimes(1);
+      expect(messageFilterSpy).toHaveBeenCalledWith(
         expect.objectContaining({
           primitiveType: 'agent',
           prompt: 'task with context',
@@ -512,7 +512,7 @@ describe('Supervisor Pattern Integration Tests', () => {
         onDelegationComplete: vi.fn(() => {
           return undefined;
         }),
-        contextFilter: ({ messages }: ContextFilterContext) => messages.filter(m => m.role !== 'system').slice(-10),
+        messageFilter: ({ messages }: MessageFilterContext) => messages.filter(m => m.role !== 'system').slice(-10),
       };
 
       const agent = new Agent({
@@ -1147,11 +1147,11 @@ describe('Supervisor Pattern - Suspension propagation', () => {
 });
 
 /**
- * Completion scorers in supervisor pattern.
- * Tests that completion scorers work alongside the supervisor's delegation system.
+ * IsTaskComplete scorers in supervisor pattern.
+ * Tests that isTaskComplete scorers work alongside the supervisor's delegation system.
  */
-describe('Supervisor Pattern - Completion scorers', () => {
-  it('should run completion scorers after each iteration in supervisor generate()', async () => {
+describe('Supervisor Pattern - IsTaskComplete scorers', () => {
+  it('should run isTaskComplete scorers after each iteration in supervisor generate()', async () => {
     const scorerRun = vi.fn().mockResolvedValue({ score: 1, reason: 'Task is complete' });
     const mockScorer = {
       id: 'supervisor-test-scorer',
@@ -1192,28 +1192,28 @@ describe('Supervisor Pattern - Completion scorers', () => {
       memory: new MockMemory(),
     });
 
-    const completionCheckEvents: any[] = [];
+    const isTaskCompleteEvents: any[] = [];
 
     const stream = await supervisorAgent.stream('Complete a task', {
       maxSteps: 3,
-      completion: { scorers: [mockScorer as any] },
+      isTaskComplete: { scorers: [mockScorer as any] },
     });
 
     for await (const chunk of stream.fullStream) {
-      if (chunk.type === 'completion-check') {
-        completionCheckEvents.push(chunk);
+      if (chunk.type === 'is-task-complete') {
+        isTaskCompleteEvents.push(chunk);
       }
     }
 
     // Scorer should have been called for the completed iteration
     expect(scorerRun).toHaveBeenCalled();
 
-    // Completion check events should have been emitted
-    expect(completionCheckEvents.length).toBeGreaterThan(0);
-    expect(completionCheckEvents[0].payload.passed).toBe(true);
+    // isTaskComplete events should have been emitted
+    expect(isTaskCompleteEvents.length).toBeGreaterThan(0);
+    expect(isTaskCompleteEvents[0].payload.passed).toBe(true);
   });
 
-  it('should continue iterating when completion scorer fails and stop when it passes', async () => {
+  it('should continue iterating when isTaskComplete scorer fails and stop when it passes', async () => {
     let scorerCallCount = 0;
     // Scorer fails on first call, passes on second
     const adaptiveScorer = {
@@ -1269,15 +1269,15 @@ describe('Supervisor Pattern - Completion scorers', () => {
       memory: new MockMemory(),
     });
 
-    const completionCheckEvents: any[] = [];
+    const isTaskCompleteEvents: any[] = [];
     const stream = await supervisorAgent.stream('Complete a task', {
       maxSteps: 5,
-      completion: { scorers: [adaptiveScorer as any] },
+      isTaskComplete: { scorers: [adaptiveScorer as any] },
     });
 
     for await (const chunk of stream.fullStream) {
-      if (chunk.type === 'completion-check') {
-        completionCheckEvents.push(chunk);
+      if (chunk.type === 'is-task-complete') {
+        isTaskCompleteEvents.push(chunk);
       }
     }
 
@@ -1287,10 +1287,10 @@ describe('Supervisor Pattern - Completion scorers', () => {
     // Model should have been invoked at least twice (due to failed scorer triggering re-run)
     expect(modelCallCount).toBeGreaterThanOrEqual(2);
 
-    // Should have 2 completion check events: one failed, one passed
-    expect(completionCheckEvents.length).toBe(2);
-    expect(completionCheckEvents[0].payload.passed).toBe(false);
-    expect(completionCheckEvents[1].payload.passed).toBe(true);
+    // Should have 2 isTaskComplete events: one failed, one passed
+    expect(isTaskCompleteEvents.length).toBe(2);
+    expect(isTaskCompleteEvents[0].payload.passed).toBe(false);
+    expect(isTaskCompleteEvents[1].payload.passed).toBe(true);
   });
 });
 
@@ -1727,19 +1727,19 @@ describe('Supervisor Pattern - onIterationComplete Hook Integration', () => {
 });
 
 /**
- * Completion feedback tests for the supervisor pattern.
+ * IsTaskComplete feedback tests for the supervisor pattern.
  * Tests scorer strategies, suppressFeedback flag, and multi-iteration callbacks.
  *
  * Key differences from agent-network.test.ts:
- * - Supervisor uses completion-check-step.ts (stream-based scorers).
- * - `suppressFeedback` stores a flag in the completion-check chunk payload and in the
+ * - Supervisor uses is-task-complete-step.ts (stream-based scorers).
+ * - `suppressFeedback` stores a flag in the is-task-complete chunk payload and in the
  *   feedback message's metadata; it does NOT prevent the message from being added to
  *   the messageList or from being sent to the model in the next iteration.
- * - maxSteps does NOT terminate the loop when a completion scorer keeps failing
+ * - maxSteps does NOT terminate the loop when an isTaskComplete scorer keeps failing
  *   (unlike the network flow).  Always ensure a scorer eventually passes to avoid
  *   an infinite loop.
  */
-describe('Supervisor Pattern - Completion feedback', () => {
+describe('Supervisor Pattern - IsTaskComplete feedback', () => {
   it('should require all scorers to pass with "all" strategy', async () => {
     const passingScorer = {
       id: 'passing-scorer',
@@ -1796,28 +1796,28 @@ describe('Supervisor Pattern - Completion feedback', () => {
       memory: new MockMemory(),
     });
 
-    const completionCheckEvents: any[] = [];
+    const isTaskCompleteEvents: any[] = [];
     const stream = await supervisorAgent.stream('Complete a task', {
       maxSteps: 5,
-      completion: {
+      isTaskComplete: {
         scorers: [passingScorer as any, adaptiveScorer as any],
         strategy: 'all',
       },
     });
 
     for await (const chunk of stream.fullStream) {
-      if (chunk.type === 'completion-check') {
-        completionCheckEvents.push(chunk);
+      if (chunk.type === 'is-task-complete') {
+        isTaskCompleteEvents.push(chunk);
       }
     }
 
     // Iter 1: adaptiveScorer fails → overall passed=false (strategy 'all' requires all to pass)
-    expect(completionCheckEvents[0].payload.passed).toBe(false);
-    expect(completionCheckEvents[0].payload.results).toHaveLength(2);
+    expect(isTaskCompleteEvents[0].payload.passed).toBe(false);
+    expect(isTaskCompleteEvents[0].payload.results).toHaveLength(2);
 
     // Iter 2: both scorers pass → overall passed=true
-    expect(completionCheckEvents[1].payload.passed).toBe(true);
-    expect(completionCheckEvents.length).toBe(2);
+    expect(isTaskCompleteEvents[1].payload.passed).toBe(true);
+    expect(isTaskCompleteEvents.length).toBe(2);
 
     expect(passingScorer.run).toHaveBeenCalledTimes(2);
     expect(adaptiveScorer.run).toHaveBeenCalledTimes(2);
@@ -1865,29 +1865,29 @@ describe('Supervisor Pattern - Completion feedback', () => {
       memory: new MockMemory(),
     });
 
-    const completionCheckEvents: any[] = [];
+    const isTaskCompleteEvents: any[] = [];
     const stream = await supervisorAgent.stream('Complete a task', {
-      completion: {
+      isTaskComplete: {
         scorers: [passingScorer as any, failingScorer as any],
         strategy: 'any',
       },
     });
 
     for await (const chunk of stream.fullStream) {
-      if (chunk.type === 'completion-check') {
-        completionCheckEvents.push(chunk);
+      if (chunk.type === 'is-task-complete') {
+        isTaskCompleteEvents.push(chunk);
       }
     }
 
     // With 'any' strategy, one passing scorer is enough
-    expect(completionCheckEvents).toHaveLength(1);
-    expect(completionCheckEvents[0].payload.passed).toBe(true);
-    expect(completionCheckEvents[0].payload.results).toHaveLength(2);
+    expect(isTaskCompleteEvents).toHaveLength(1);
+    expect(isTaskCompleteEvents[0].payload.passed).toBe(true);
+    expect(isTaskCompleteEvents[0].payload.results).toHaveLength(2);
     expect(passingScorer.run).toHaveBeenCalled();
     expect(failingScorer.run).toHaveBeenCalled();
   });
 
-  it('should include scorer results and reason in completion-check event', async () => {
+  it('should include scorer results and reason in is-task-complete event', async () => {
     const mockScorer = {
       id: 'detailed-scorer',
       name: 'Detailed Scorer',
@@ -1923,26 +1923,26 @@ describe('Supervisor Pattern - Completion feedback', () => {
       memory: new MockMemory(),
     });
 
-    let completionCheckEvent: any;
+    let isTaskCompleteEvent: any;
     const stream = await supervisorAgent.stream('Do the task', {
-      completion: { scorers: [mockScorer as any] },
+      isTaskComplete: { scorers: [mockScorer as any] },
     });
 
     for await (const chunk of stream.fullStream) {
-      if (chunk.type === 'completion-check') {
-        completionCheckEvent = chunk;
+      if (chunk.type === 'is-task-complete') {
+        isTaskCompleteEvent = chunk;
       }
     }
 
-    expect(completionCheckEvent).toBeDefined();
-    expect(completionCheckEvent.payload.results).toHaveLength(1);
+    expect(isTaskCompleteEvent).toBeDefined();
+    expect(isTaskCompleteEvent.payload.results).toHaveLength(1);
     // ScorerResult uses scorerId/scorerName (not id/name)
-    expect(completionCheckEvent.payload.results[0].scorerId).toBe('detailed-scorer');
-    expect(completionCheckEvent.payload.results[0].reason).toBe('Task clearly completed with all requirements met');
-    expect(completionCheckEvent.payload.passed).toBe(true);
+    expect(isTaskCompleteEvent.payload.results[0].scorerId).toBe('detailed-scorer');
+    expect(isTaskCompleteEvent.payload.results[0].reason).toBe('Task clearly completed with all requirements met');
+    expect(isTaskCompleteEvent.payload.passed).toBe(true);
   });
 
-  it('should report suppressFeedback: true in completion-check event when configured', async () => {
+  it('should report suppressFeedback: true in is-task-complete event when configured', async () => {
     const passingScorer = {
       id: 'scorer',
       name: 'Scorer',
@@ -1984,10 +1984,10 @@ describe('Supervisor Pattern - Completion feedback', () => {
 
     let chunkWithSuppression: any;
     const stream1 = await agentWithSuppression.stream('Do task', {
-      completion: { scorers: [passingScorer as any], suppressFeedback: true },
+      isTaskComplete: { scorers: [passingScorer as any], suppressFeedback: true },
     });
     for await (const chunk of stream1.fullStream) {
-      if (chunk.type === 'completion-check') chunkWithSuppression = chunk;
+      if (chunk.type === 'is-task-complete') chunkWithSuppression = chunk;
     }
     expect(chunkWithSuppression.payload.suppressFeedback).toBe(true);
 
@@ -2002,10 +2002,10 @@ describe('Supervisor Pattern - Completion feedback', () => {
 
     let chunkDefault: any;
     const stream2 = await agentDefault.stream('Do task', {
-      completion: { scorers: [passingScorer as any] },
+      isTaskComplete: { scorers: [passingScorer as any] },
     });
     for await (const chunk of stream2.fullStream) {
-      if (chunk.type === 'completion-check') chunkDefault = chunk;
+      if (chunk.type === 'is-task-complete') chunkDefault = chunk;
     }
     expect(chunkDefault.payload.suppressFeedback).toBe(false);
   });
@@ -2066,7 +2066,7 @@ describe('Supervisor Pattern - Completion feedback', () => {
 
     const stream = await supervisorAgent.stream('Complete a complex task', {
       maxSteps: 5,
-      completion: { scorers: [mockScorer as any] },
+      isTaskComplete: { scorers: [mockScorer as any] },
       onIterationComplete: context => {
         iterationCallbacks.push({ ...context });
       },
@@ -2092,7 +2092,7 @@ describe('Supervisor Pattern - Completion feedback', () => {
     expect(iterationCallbacks[2].iteration).toBe(3);
   });
 
-  it('should report maxIterationReached in completion-check when iteration equals maxSteps', async () => {
+  it('should report maxIterationReached in is-task-complete when iteration equals maxSteps', async () => {
     // Scorer fails on first call, passes on second — with maxSteps:2 the second iteration
     // has currentIteration (2) >= maxSteps (2), so maxIterationReached should be true.
     let scorerCallCount = 0;
@@ -2144,23 +2144,23 @@ describe('Supervisor Pattern - Completion feedback', () => {
       memory: new MockMemory(),
     });
 
-    const completionCheckEvents: any[] = [];
+    const isTaskCompleteEvents: any[] = [];
     const stream = await supervisorAgent.stream('Complete a task', {
       maxSteps: 2,
-      completion: { scorers: [mockScorer as any] },
+      isTaskComplete: { scorers: [mockScorer as any] },
     });
 
     for await (const chunk of stream.fullStream) {
-      if (chunk.type === 'completion-check') {
-        completionCheckEvents.push(chunk);
+      if (chunk.type === 'is-task-complete') {
+        isTaskCompleteEvents.push(chunk);
       }
     }
 
-    expect(completionCheckEvents).toHaveLength(2);
+    expect(isTaskCompleteEvents).toHaveLength(2);
     // First iteration (currentIteration=1): 1 >= 2 is false
-    expect(completionCheckEvents[0].payload.maxIterationReached).toBe(false);
+    expect(isTaskCompleteEvents[0].payload.maxIterationReached).toBe(false);
     // Second iteration (currentIteration=2): 2 >= 2 is true
-    expect(completionCheckEvents[1].payload.maxIterationReached).toBe(true);
+    expect(isTaskCompleteEvents[1].payload.maxIterationReached).toBe(true);
   });
 });
 
@@ -2251,18 +2251,18 @@ describe('Supervisor Pattern - Message history transfer to sub-agents', () => {
     expect(promptString).toContain('My name is Alice');
   });
 
-  it('should make completion feedback visible to both the supervisor and sub-agents', async () => {
-    // Completion feedback (from failed scorers) is added as an assistant message to the
+  it('should make isTaskComplete feedback visible to both the supervisor and sub-agents', async () => {
+    // IsTaskComplete feedback (from failed scorers) is added as an assistant message to the
     // supervisor's own message list. The supervisor passes ALL messages (input + response,
-    // including completion feedback) as context to sub-agents. This means:
+    // including isTaskComplete feedback) as context to sub-agents. This means:
     //   - The SUPERVISOR'S LLM sees the feedback on its next call.
     //   - Sub-agents also see the feedback directly in their context, so they can produce
     //     a better response without the supervisor needing to relay the feedback.
     //
     // The test verifies:
     //   1. The supervisor loop continues when scorer fails (feedback keeps isContinued = true).
-    //   2. completion-check events are emitted so the feedback is observable.
-    //   3. Completion feedback IS directly visible in sub-agent context on the second call.
+    //   2. is-task-complete events are emitted so the feedback is observable.
+    //   3. IsTaskComplete feedback IS directly visible in sub-agent context on the second call.
 
     let supervisorLLMReceivedPrompts: any[] = [];
     let subAgentReceivedPrompts: any[] = [];
@@ -2320,12 +2320,12 @@ describe('Supervisor Pattern - Message history transfer to sub-agents', () => {
       }),
     };
 
-    // The completion check step runs only when isContinued = false (finish reason: stop).
+    // The isTaskComplete step runs only when isContinued = false (finish reason: stop).
     // Sequence:
     //   call 1: tool-call → sub-agent call 1 (isContinued = true, check skipped)
-    //   call 2: stop      → completion check runs, scorer FAILS, feedback added to supervisor context
+    //   call 2: stop      → isTaskComplete check runs, scorer FAILS, feedback added to supervisor context
     //   call 3: tool-call → sub-agent call 2 (supervisor's LLM has seen the feedback)
-    //   call 4: stop      → completion check runs, scorer PASSES, loop ends
+    //   call 4: stop      → isTaskComplete check runs, scorer PASSES, loop ends
     let supervisorCallCount = 0;
     const supervisorAgent = new Agent({
       id: 'supervisor-feedback-visibility',
@@ -2466,15 +2466,15 @@ describe('Supervisor Pattern - Message history transfer to sub-agents', () => {
       memory: new MockMemory(),
     });
 
-    const completionCheckEvents: any[] = [];
+    const isTaskCompleteEvents: any[] = [];
     const result = await supervisorAgent.stream('Complete a multi-part task', {
       maxSteps: 6,
-      completion: { scorers: [mockScorer as any] },
+      isTaskComplete: { scorers: [mockScorer as any] },
     });
 
     for await (const chunk of result.fullStream) {
-      if (chunk.type === 'completion-check') {
-        completionCheckEvents.push(chunk);
+      if (chunk.type === 'is-task-complete') {
+        isTaskCompleteEvents.push(chunk);
       }
     }
 
@@ -2484,19 +2484,19 @@ describe('Supervisor Pattern - Message history transfer to sub-agents', () => {
     // Sub-agent called for each delegation
     expect(subAgentReceivedPrompts.length).toBeGreaterThanOrEqual(2);
 
-    // completion-check events were emitted — the feedback is observable in the supervisor stream
-    expect(completionCheckEvents).toHaveLength(2);
-    expect(completionCheckEvents[0].payload.passed).toBe(false);
-    expect(completionCheckEvents[1].payload.passed).toBe(true);
+    // is-task-complete events were emitted — the feedback is observable in the supervisor stream
+    expect(isTaskCompleteEvents).toHaveLength(2);
+    expect(isTaskCompleteEvents[0].payload.passed).toBe(false);
+    expect(isTaskCompleteEvents[1].payload.passed).toBe(true);
 
-    // Verify the supervisor's LLM received the completion feedback in its THIRD call.
+    // Verify the supervisor's LLM received the isTaskComplete feedback in its THIRD call.
     // The feedback is an assistant message in the supervisor's context, visible to the
     // supervisor LLM so it can craft better delegation prompts in subsequent iterations.
     const supervisorCall3Str = JSON.stringify(supervisorLLMReceivedPrompts[2]);
     expect(supervisorCall3Str).toContain('Completion Check Results');
     expect(supervisorCall3Str).toContain('NOT COMPLETE');
 
-    // Sub-agents now receive ALL supervisor messages as context (including completion feedback),
+    // Sub-agents now receive ALL supervisor messages as context (including isTaskComplete feedback),
     // because tool context passes all messages (input + response). The feedback is directly
     // visible to the sub-agent on its second call so it can produce a better response.
     const subAgentCall2Str = JSON.stringify(subAgentReceivedPrompts[1]);
@@ -2505,8 +2505,8 @@ describe('Supervisor Pattern - Message history transfer to sub-agents', () => {
     expect(subAgentCall2Str).toContain('Complete a multi-part task');
   });
 
-  it('should allow contextFilter to customise which messages are forwarded to the sub-agent', async () => {
-    // The optional delegation.contextFilter callback lets callers control exactly
+  it('should allow messageFilter to customise which messages are forwarded to the sub-agent', async () => {
+    // The optional delegation.messageFilter callback lets callers control exactly
     // which supervisor context messages are forwarded to sub-agents.
 
     let subAgentReceivedPrompts: any[] = [];
@@ -2573,7 +2573,7 @@ describe('Supervisor Pattern - Message history transfer to sub-agents', () => {
       memory: new MockMemory(),
     });
 
-    // Pass two user messages, but the contextFilter will keep only the most recent one
+    // Pass two user messages, but the messageFilter will keep only the most recent one
     await supervisorAgent.generate(
       [
         { role: 'user', content: 'SECRET: do not share this' },
@@ -2582,7 +2582,7 @@ describe('Supervisor Pattern - Message history transfer to sub-agents', () => {
       {
         maxSteps: 3,
         delegation: {
-          contextFilter: async ({ messages }) => {
+          messageFilter: async ({ messages }) => {
             // Only forward messages that don't contain "SECRET"
             const filtered = messages.filter((m: any) => {
               const content = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);

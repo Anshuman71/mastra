@@ -169,7 +169,7 @@ export class MastraLLMVNext extends MastraBase {
     maxProcessorRetries,
     processorStates,
     activeTools,
-    completion,
+    isTaskComplete,
     onIterationComplete,
     workspace,
   }: ModelLoopStreamArgs<Tools, OUTPUT>): MastraModelOutput<OUTPUT> {
@@ -245,7 +245,7 @@ export class MastraLLMVNext extends MastraBase {
         maxProcessorRetries,
         processorStates,
         activeTools,
-        completion,
+        isTaskComplete,
         onIterationComplete,
         workspace,
         options: {

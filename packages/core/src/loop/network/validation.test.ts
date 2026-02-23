@@ -398,7 +398,7 @@ describe('formatCompletionFeedback', () => {
       timedOut: false,
     };
 
-    const feedback = formatCompletionFeedback(result);
+    const feedback = formatCompletionFeedback(result, false);
 
     expect(feedback).toContain('Score: 1 ✅');
     // Should not have "Reason:" line since no reason provided

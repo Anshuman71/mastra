@@ -4,7 +4,7 @@ import { createWorkflow } from '../../../workflows';
 import type { OuterLLMRun } from '../../types';
 import { llmIterationOutputSchema } from '../schema';
 import type { LLMIterationData } from '../schema';
-import { createCompletionCheckStep } from './completion-check-step';
+import { createIsTaskCompleteStep } from './is-task-complete-step';
 import { createLLMExecutionStep } from './llm-execution-step';
 import { createLLMMappingStep } from './llm-mapping-step';
 import { createToolCallStep } from './tool-call-step';
@@ -16,8 +16,8 @@ export function createAgenticExecutionWorkflow<Tools extends ToolSet = ToolSet, 
 }: OuterLLMRun<Tools, OUTPUT>) {
   // Track how many response model messages existed before each LLM call.
   // This lets add-response-to-messagelist only add truly NEW messages from the current
-  // iteration, preventing historical completion-check and iteration-feedback messages
-  // from being re-added (which would bypass the completionResult merge guard because
+  // iteration, preventing historical is-task-complete and iteration-feedback messages
+  // from being re-added (which would bypass the isTaskCompleteResult merge guard because
   // the metadata is lost in the MastraDBMessage → ModelMessage round-trip).
   let existingResponseModelCount = 0;
 
@@ -42,7 +42,7 @@ export function createAgenticExecutionWorkflow<Tools extends ToolSet = ToolSet, 
     llmExecutionStep,
   );
 
-  const completionCheckStep = createCompletionCheckStep({
+  const isTaskCompleteStep = createIsTaskCompleteStep({
     models,
     _internal,
     ...rest,
@@ -97,7 +97,7 @@ export function createAgenticExecutionWorkflow<Tools extends ToolSet = ToolSet, 
       async ({ inputData }) => {
         // Capture response model message count BEFORE the LLM runs.
         // This snapshot is used below to add only NEW messages to the messageList,
-        // preventing historical messages (e.g. completion-check, iteration-feedback)
+        // preventing historical messages (e.g. is-task-complete, iteration-feedback)
         // from being re-added on subsequent iterations.
         existingResponseModelCount = rest.messageList.get.response.aiV5.model().length;
         return inputData as LLMIterationData<Tools, OUTPUT>;
@@ -108,11 +108,12 @@ export function createAgenticExecutionWorkflow<Tools extends ToolSet = ToolSet, 
     .map(
       async ({ inputData }) => {
         const typedInputData = inputData as LLMIterationData<Tools, OUTPUT>;
+        console.dir({ typedInputData }, { depth: null });
         // Add assistant response messages to messageList BEFORE processing tool calls
         // This ensures messages are available for persistence before suspension.
         // IMPORTANT: only add messages beyond existingResponseModelCount to avoid
-        // re-adding historical completion-check / iteration-feedback messages whose
-        // completionResult metadata is stripped during the ModelMessage round-trip.
+        // re-adding historical is-task-complete / iteration-feedback messages whose
+        // isTaskCompleteResult metadata is stripped during the ModelMessage round-trip.
         const responseMessages = typedInputData.messages.nonUser;
         const newMessages = responseMessages ? responseMessages.slice(existingResponseModelCount) : [];
         if (newMessages.length > 0) {
@@ -125,12 +126,13 @@ export function createAgenticExecutionWorkflow<Tools extends ToolSet = ToolSet, 
     .map(
       async ({ inputData }) => {
         const typedInputData = inputData as LLMIterationData<Tools, OUTPUT>;
+        console.dir({ toolCalls: typedInputData.output.toolCalls }, { depth: null });
         return typedInputData.output.toolCalls || [];
       },
       { id: 'map-tool-calls' },
     )
     .foreach(toolCallStep, { concurrency: sequentialExecutionRequired ? 1 : toolCallConcurrency })
     .then(llmMappingStep)
-    .then(completionCheckStep)
+    .then(isTaskCompleteStep)
     .commit();
 }

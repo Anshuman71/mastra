@@ -2508,12 +2508,12 @@ export class Agent<
 
               const { resumeData, suspend } = context?.agent ?? {};
 
-              // Apply contextFilter callback (runs after onDelegationStart so effectivePrompt
+              // Apply messageFilter callback (runs after onDelegationStart so effectivePrompt
               // reflects any hook modifications). Falls back to full context on error.
               let filteredContextMessages = contextMessages;
-              if (delegation?.contextFilter) {
+              if (delegation?.messageFilter) {
                 try {
-                  filteredContextMessages = await delegation.contextFilter({
+                  filteredContextMessages = await delegation.messageFilter({
                     messages: contextMessages,
                     primitiveId: agent.id,
                     primitiveType: 'agent',
@@ -2527,7 +2527,7 @@ export class Agent<
                     toolCallId,
                   });
                 } catch (filterError) {
-                  this.logger.error(`[Agent:${this.name}] - contextFilter error: ${filterError}`);
+                  this.logger.error(`[Agent:${this.name}] - messageFilter error: ${filterError}`);
                   // Fall back to unfiltered context on error
                 }
               }

@@ -184,15 +184,15 @@ const stream = await supervisorAgent.stream('Research AI in education', {
 })
 ```
 
-## Add context filtering
+## Add message filtering
 
-By default, subagents receive the full conversation context from the supervisor. Use `contextFilter` to control what messages are shared -- for example, to remove sensitive data or limit the number of messages:
+By default, subagents receive the full conversation context from the supervisor. Use `messageFilter` to control what messages are shared -- for example, to remove sensitive data or limit the number of messages:
 
 ```typescript
 const stream = await supervisorAgent.stream('Research AI in education', {
   maxSteps: 10,
   delegation: {
-    contextFilter: ({ messages, primitiveId, prompt }) => {
+    messageFilter: ({ messages, primitiveId, prompt }) => {
       return messages
         .filter(msg => {
           const content =
@@ -231,9 +231,9 @@ const stream = await supervisorAgent.stream('Research AI in education', {
 })
 ```
 
-## Add completion scoring
+## Add task completion scoring
 
-Completion scorers automatically validate whether the task is complete. If validation fails, the supervisor continues iterating. The feedback from failed scorers is included in the conversation context so subagents can see what was missing:
+Task completion scorers automatically validate whether the task is complete. If validation fails, the supervisor continues iterating. The feedback from failed scorers is included in the conversation context so subagents can see what was missing:
 
 ```typescript
 import { createScorer } from '@mastra/core/evals'
@@ -250,7 +250,7 @@ const taskCompleteScorer = createScorer({
 
 const stream = await supervisorAgent.stream('Research AI in education', {
   maxSteps: 10,
-  completion: {
+  isTaskComplete: {
     scorers: [taskCompleteScorer],
     strategy: 'all',
     onComplete: async result => {

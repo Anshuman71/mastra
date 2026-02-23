@@ -1,18 +1,18 @@
 import type { ToolSet } from '@internal/ai-sdk-v5';
-import type { MastraDBMessage } from '../../../agent';
+import type { IsTaskCompleteRunResult, MastraDBMessage } from '../../../agent';
 import type { ChunkType } from '../../../stream/types';
 import { ChunkFrom } from '../../../stream/types';
 import { createStep } from '../../../workflows';
-import type { StreamCompletionContext, CompletionRunResult } from '../../network/validation';
 import { runStreamCompletionScorers, formatStreamCompletionFeedback } from '../../network/validation';
+import type { StreamCompletionContext } from '../../network/validation';
 import type { OuterLLMRun } from '../../types';
 import { llmIterationOutputSchema } from '../schema';
 
-export function createCompletionCheckStep<Tools extends ToolSet = ToolSet, OUTPUT = undefined>(
+export function createIsTaskCompleteStep<Tools extends ToolSet = ToolSet, OUTPUT = undefined>(
   params: OuterLLMRun<Tools, OUTPUT>,
 ) {
   const {
-    completion,
+    isTaskComplete,
     maxSteps,
     messageList,
     requestContext,
@@ -28,18 +28,18 @@ export function createCompletionCheckStep<Tools extends ToolSet = ToolSet, OUTPU
   let currentIteration = 0;
 
   return createStep({
-    id: 'completionCheckStep',
+    id: 'isTaskCompleteStep',
     inputSchema: llmIterationOutputSchema,
     outputSchema: llmIterationOutputSchema,
     execute: async ({ inputData }) => {
       // Increment iteration count
       currentIteration++;
 
-      // Only run completion check if scorers are configured
-      const hasCompletionScorers = completion?.scorers && completion.scorers.length > 0;
+      // Only run isTaskComplete check if scorers are configured
+      const hasIsTaskCompleteScorers = isTaskComplete?.scorers && isTaskComplete.scorers.length > 0;
 
       //Also check if the step result is not continued to avoid running scorers before the LLM is done
-      if (!hasCompletionScorers || inputData.stepResult?.isContinued) {
+      if (!hasIsTaskCompleteScorers || inputData.stepResult?.isContinued) {
         return inputData;
       }
       // Get the original user message for context
@@ -54,14 +54,14 @@ export function createCompletionCheckStep<Tools extends ToolSet = ToolSet, OUTPU
         }
       }
 
-      // Build completion context
+      // Build isTaskComplete context
       const toolCalls = (inputData.output.toolCalls || []) as Array<{ toolName: string; args?: unknown }>;
       const toolResults = (inputData.output.toolResults || []) as Array<{
         toolName: string;
         result?: unknown;
       }>;
 
-      const completionContext: StreamCompletionContext = {
+      const isTaskCompleteContext: StreamCompletionContext = {
         iteration: currentIteration,
         maxIterations: maxSteps,
         originalTask,
@@ -83,24 +83,24 @@ export function createCompletionCheckStep<Tools extends ToolSet = ToolSet, OUTPU
         customContext: requestContext ? Object.fromEntries(requestContext.entries()) : undefined,
       };
 
-      // Run completion scorers - they're guaranteed to exist at this point
-      const completionResult: CompletionRunResult = await runStreamCompletionScorers(
-        completion.scorers!,
-        completionContext,
+      // Run isTaskComplete scorers - they're guaranteed to exist at this point
+      const isTaskCompleteResult: IsTaskCompleteRunResult = await runStreamCompletionScorers(
+        isTaskComplete.scorers!,
+        isTaskCompleteContext,
         {
-          strategy: completion.strategy,
-          parallel: completion.parallel,
-          timeout: completion.timeout,
+          strategy: isTaskComplete.strategy,
+          parallel: isTaskComplete.parallel,
+          timeout: isTaskComplete.timeout,
         },
       );
 
       // Call onComplete callback if configured
-      if (completion.onComplete) {
-        await completion.onComplete(completionResult);
+      if (isTaskComplete.onComplete) {
+        await isTaskComplete.onComplete(isTaskCompleteResult);
       }
 
-      // Update isContinued based on completion result
-      if (completionResult.complete) {
+      // Update isContinued based on isTaskComplete result
+      if (isTaskCompleteResult.complete) {
         // Task is complete - stop continuing
         if (inputData.stepResult) {
           inputData.stepResult.isContinued = false;
@@ -114,7 +114,7 @@ export function createCompletionCheckStep<Tools extends ToolSet = ToolSet, OUTPU
 
       // Add feedback as assistant message for the LLM to see in next iteration
       const maxIterationReached = maxSteps ? currentIteration >= maxSteps : false;
-      const feedback = formatStreamCompletionFeedback(completionResult, maxIterationReached);
+      const feedback = formatStreamCompletionFeedback(isTaskCompleteResult, maxIterationReached);
       messageList.add(
         {
           id: mastra?.generateId(),
@@ -131,8 +131,8 @@ export function createCompletionCheckStep<Tools extends ToolSet = ToolSet, OUTPU
             metadata: {
               mode: 'stream',
               completionResult: {
-                passed: completionResult.complete,
-                suppressFeedback: !!completion.suppressFeedback,
+                passed: isTaskCompleteResult.complete,
+                suppressFeedback: !!isTaskComplete.suppressFeedback,
               },
             },
             format: 2,
@@ -141,24 +141,24 @@ export function createCompletionCheckStep<Tools extends ToolSet = ToolSet, OUTPU
         'response',
       );
 
-      // Emit completion-check event
+      // Emit is-task-complete event
       controller.enqueue({
-        type: 'completion-check',
+        type: 'is-task-complete',
         runId: runId,
         from: ChunkFrom.AGENT,
         payload: {
           iteration: currentIteration,
-          passed: completionResult.complete,
-          results: completionResult.scorers,
-          duration: completionResult.totalDuration,
-          timedOut: completionResult.timedOut,
-          reason: completionResult.completionReason,
+          passed: isTaskCompleteResult.complete,
+          results: isTaskCompleteResult.scorers,
+          duration: isTaskCompleteResult.totalDuration,
+          timedOut: isTaskCompleteResult.timedOut,
+          reason: isTaskCompleteResult.completionReason,
           maxIterationReached: !!maxIterationReached,
-          suppressFeedback: !!completion.suppressFeedback,
+          suppressFeedback: !!isTaskComplete.suppressFeedback,
         },
       } as ChunkType<OUTPUT>);
 
-      return { ...inputData, completionCheckFailed: !completionResult.complete };
+      return { ...inputData, isTaskCompleteCheckFailed: !isTaskCompleteResult.complete };
     },
   });
 }

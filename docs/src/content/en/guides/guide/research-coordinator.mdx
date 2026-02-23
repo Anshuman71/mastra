@@ -166,7 +166,7 @@ Success criteria:
       },
 
       // Only pass last 10 messages to subagents
-      contextFilter: ({ messages }) => {
+      messageFilter: ({ messages }) => {
         return messages.slice(-10)
       },
     },
@@ -191,7 +191,7 @@ The `defaultOptions` on the supervisor agent configure delegation hooks and iter
 
 - `onDelegationStart` modifies the research agent's prompt to request recent data
 - `onDelegationComplete` logs completion, bails on errors, and provides feedback
-- `contextFilter` limits context to the last 10 messages for efficiency
+- `messageFilter` limits context to the last 10 messages for efficiency
 - `onIterationComplete` monitors progress after each iteration
 
 ## Test the basic supervisor
@@ -222,9 +222,9 @@ main()
 
 The supervisor uses the delegation hooks and iteration monitoring configured in `defaultOptions`.
 
-## Add completion scoring
+## Add task completion scoring
 
-Completion scorers automatically validate whether the task is complete. They prevent the supervisor from finishing prematurely.
+Task completion scorers automatically validate whether the task is complete. They prevent the supervisor from finishing prematurely.
 
 Create a scorer in `src/mastra/scorers/task-complete-scorer.ts`:
 
@@ -258,7 +258,7 @@ Install the evals package:
 npm install @mastra/evals
 ```
 
-Update the supervisor agent to include completion scoring in `defaultOptions` in `src/mastra/agents/supervisor-agent.ts`:
+Update the supervisor agent to include task completion scoring in `defaultOptions` in `src/mastra/agents/supervisor-agent.ts`:
 
 ```typescript title="src/mastra/agents/supervisor-agent.ts"
 import { Agent } from '@mastra/core/agent'
@@ -336,14 +336,14 @@ Success criteria:
         }
       },
 
-      contextFilter: ({ messages }) => {
+      messageFilter: ({ messages }) => {
         return messages.slice(-10)
       },
     },
 
     // highlight-start
-    // Validate completion
-    completion: {
+    // Validate task completion
+    isTaskComplete: {
       scorers: [taskCompleteScorer],
       strategy: 'all',
       onComplete: async result => {
@@ -357,7 +357,7 @@ Success criteria:
 })
 ```
 
-The scorer checks for substantial content, proper structure, and contextual information. If the task isn't complete, the supervisor will continue iterating. Now all hooks and completion scoring are configured in the agent's `defaultOptions`, making them apply to every call automatically.
+The scorer checks for substantial content, proper structure, and contextual information. If the task isn't complete, the supervisor will continue iterating. Now all hooks and task completion scoring are configured in the agent's `defaultOptions`, making them apply to every call automatically.
 
 ## Test the research coordinator
 

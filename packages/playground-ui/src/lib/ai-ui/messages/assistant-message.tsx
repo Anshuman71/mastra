@@ -17,6 +17,7 @@ interface ContentItem {
   metadata?: {
     mode?: string;
     completionResult?: unknown;
+    isTaskCompleteResult?: unknown;
   };
 }
 
@@ -32,7 +33,7 @@ export const AssistantMessage = ({ hasModelList }: AssistantMessageProps) => {
     ({ type, metadata }) =>
       type === 'tool-call' ||
       type === 'reasoning' ||
-      (type === 'text' && metadata?.mode === 'network' && metadata?.completionResult),
+      (type === 'text' && metadata?.mode === 'network' && (metadata?.completionResult || metadata?.isTaskCompleteResult)),
   );
 
   const modelMetadata = data.metadata?.custom?.modelMetadata as { modelId: string; modelProvider: string } | undefined;

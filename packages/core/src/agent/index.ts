@@ -18,13 +18,18 @@ export type {
   DelegationCompleteResult,
   OnDelegationCompleteHandler,
   DelegationConfig,
-  ContextFilterContext,
+  MessageFilterContext,
+  /** @deprecated Use MessageFilterContext instead */
+  MessageFilterContext as ContextFilterContext,
   // Iteration hook types
   IterationCompleteContext,
   IterationCompleteResult,
   OnIterationCompleteHandler,
-  // Completion types
-  StreamCompletionConfig,
+  // IsTaskComplete types (supervisor stream/generate)
+  StreamIsTaskCompleteConfig,
+  IsTaskCompleteConfig,
+  IsTaskCompleteRunResult,
+  // Completion types (network)
   CompletionConfig,
   CompletionRunResult,
   // Network options

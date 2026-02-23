@@ -343,9 +343,9 @@ interface TripwirePayload<TMetadata = unknown> {
 }
 
 /**
- * Payload for completion-check events emitted during stream/generate scoring.
+ * Payload for is-task-complete events emitted during stream/generate scoring.
  */
-interface CompletionCheckPayload {
+interface IsTaskCompletePayload {
   /** Current iteration number */
   iteration: number;
   /** Whether all/any scorers passed based on strategy */
@@ -671,7 +671,7 @@ export type AgentChunkType<OUTPUT = undefined> =
   | (BaseChunkType & { type: 'step-output'; payload: StepOutputPayload })
   | (BaseChunkType & { type: 'watch'; payload: WatchPayload })
   | (BaseChunkType & { type: 'tripwire'; payload: TripwirePayload })
-  | (BaseChunkType & { type: 'completion-check'; payload: CompletionCheckPayload });
+  | (BaseChunkType & { type: 'is-task-complete'; payload: IsTaskCompletePayload });
 
 export type WorkflowStreamEvent =
   | (BaseChunkType & {

@@ -8,7 +8,7 @@ import type {
 } from '@internal/ai-sdk-v5';
 import type { StopCondition as StopConditionV6 } from '@internal/ai-v6';
 import z from 'zod';
-import type { OnIterationCompleteHandler } from '../agent/agent.types';
+import type { IsTaskCompleteConfig, OnIterationCompleteHandler } from '../agent/agent.types';
 import type { MessageInput, MessageList } from '../agent/message-list';
 import type { SaveQueueManager } from '../agent/save-queue';
 import type { StructuredOutputOptions } from '../agent/types';
@@ -36,7 +36,6 @@ import type {
 import type { MastraIdGenerator } from '../types';
 import type { OutputWriter } from '../workflows/types';
 import type { Workspace } from '../workspace/workspace';
-import type { CompletionConfig } from './network/validation';
 
 type StopCondition = StopConditionV5<any> | StopConditionV6<any>;
 
@@ -136,13 +135,13 @@ export type LoopOptions<TOOLS extends ToolSet = ToolSet, OUTPUT = undefined> = {
   maxProcessorRetries?: number;
 
   /**
-   * Completion scoring configuration for supervisor patterns.
+   * isTaskComplete scoring configuration for supervisor patterns.
    * Scorers evaluate whether the task is complete after each iteration.
    *
    * When scorers fail, feedback is automatically added to the message list
    * so the LLM can see why the task isn't complete and adjust its approach.
    */
-  completion?: CompletionConfig;
+  isTaskComplete?: IsTaskCompleteConfig;
 
   /**
    * Callback fired after each iteration completes.
