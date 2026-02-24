@@ -3,8 +3,8 @@ import { useAgents } from '@/domains/agents/hooks/use-agents';
 import { useAgentVersions } from '@/domains/agents/hooks/use-agent-versions';
 import { useWorkflows } from '@/domains/workflows/hooks/use-workflows';
 import { useScorers } from '@/domains/scores/hooks/use-scorers';
-import { SelectField } from '@/ds/components/FormFields/select-field';
-import { Skeleton } from '@/ds/components/Skeleton';
+import { Combobox } from '@/ds/components/Combobox';
+import { Label } from '@/ds/components/Label';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/ds/components/Tooltip';
 import { useIsCmsAvailable } from '@/domains/cms/hooks/use-is-cms-available';
 
@@ -17,6 +17,7 @@ export interface TargetSelectorProps {
   setTargetId: (id: string) => void;
   targetVersionId: string;
   setTargetVersionId: (id: string) => void;
+  container?: React.RefObject<HTMLElement | null>;
 }
 
 const targetTypeOptions = [
@@ -32,6 +33,7 @@ export function TargetSelector({
   setTargetId,
   targetVersionId,
   setTargetVersionId,
+  container,
 }: TargetSelectorProps) {
   const { data: agents, isLoading: agentsLoading } = useAgents();
   const { data: workflows, isLoading: workflowsLoading } = useWorkflows();
@@ -90,73 +92,76 @@ export function TargetSelector({
 
   return (
     <div className="grid gap-6">
-      <SelectField
-        label="Target Type"
-        name="target-type"
-        value={targetType}
-        onValueChange={handleTypeChange}
-        options={targetTypeOptions}
-        placeholder="Select target type"
-        variant="experimental"
-        size="default"
-      />
+      <div className="grid gap-2">
+        <Label>Target Type</Label>
+        <Combobox
+          options={targetTypeOptions}
+          value={targetType}
+          onValueChange={handleTypeChange}
+          placeholder="Select target type"
+          searchPlaceholder="Search types..."
+          emptyText="No types available"
+          container={container}
+        />
+      </div>
 
-      {targetType &&
-        (isTargetsLoading ? (
-          <Skeleton className="h-10 w-full" />
-        ) : (
-          <SelectField
-            label={targetLabel}
-            name="target-id"
+      {targetType && (
+        <div className="grid gap-2">
+          <Label>{targetLabel}</Label>
+          <Combobox
+            options={targetOptions}
             value={targetId}
             onValueChange={handleTargetChange}
-            options={targetOptions}
             placeholder={`Select ${targetType}`}
-            variant="experimental"
-            size="default"
+            searchPlaceholder="Search..."
+            emptyText="No targets available"
+            disabled={isTargetsLoading}
+            container={container}
           />
-        ))}
+        </div>
+      )}
 
-      {showVersionSelector && isStoredAgent && versionsLoading && <Skeleton className="h-10 w-full" />}
-
-      {showVersionSelector && isStoredAgent && !versionsLoading && (
-        <SelectField
-          label="Version"
-          name="target-version-id"
-          value={targetVersionId}
-          onValueChange={setTargetVersionId}
-          options={versionOptions}
-          placeholder="Select a version"
-          variant="experimental"
-          size="default"
-        />
+      {showVersionSelector && isStoredAgent && (
+        <div className="grid gap-2">
+          <Label>Version</Label>
+          <Combobox
+            options={versionOptions}
+            value={targetVersionId}
+            onValueChange={setTargetVersionId}
+            placeholder="Select a version"
+            searchPlaceholder="Search versions..."
+            emptyText="No versions available"
+            disabled={versionsLoading}
+            container={container}
+          />
+        </div>
       )}
 
       {showVersionSelector && !isStoredAgent && (
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div>
-                <SelectField
-                  label="Version"
-                  name="target-version-id"
-                  value=""
-                  onValueChange={() => {}}
-                  options={[]}
-                  placeholder="Select a version"
-                  variant="experimental"
-                  size="default"
-                  disabled
-                />
-              </div>
-            </TooltipTrigger>
-            <TooltipContent>
-              {isAgentSelected
-                ? 'This agent does not support versions.'
-                : 'Select an agent to choose a version.'}
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+        <div className="grid gap-2">
+          <Label>Version</Label>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div>
+                  <Combobox
+                    options={[]}
+                    value=""
+                    onValueChange={() => {}}
+                    placeholder="Select a version"
+                    searchPlaceholder="Search versions..."
+                    emptyText="No versions available"
+                    disabled
+                    container={container}
+                  />
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                {isAgentSelected ? 'This agent does not support versions.' : 'Select an agent to choose a version.'}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
       )}
     </div>
   );
