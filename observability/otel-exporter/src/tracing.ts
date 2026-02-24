@@ -437,9 +437,7 @@ export class OtelExporter extends BaseExporter {
 
       this.debugLog(`Log export initialized (endpoint: ${logEndpoint})`);
     } catch (error) {
-      this.logger.warn(
-        '[OtelExporter] Failed to initialize log export. Required packages: @opentelemetry/sdk-logs @opentelemetry/api-logs',
-      );
+      this.logger.warn('[OtelExporter] Failed to initialize log export');
       this.debugLog('Log setup error:', error);
     }
   }
@@ -472,13 +470,17 @@ export class OtelExporter extends BaseExporter {
         [ATTR_SERVICE_NAME]: this.observabilityConfig?.serviceName || 'mastra-service',
       });
 
+      const exportTimeoutMillis = this.config.timeout || 30000;
+      // OTel SDK requires exportIntervalMillis >= exportTimeoutMillis
+      const exportIntervalMillis = Math.max(60000, exportTimeoutMillis);
+
       this.meterProvider = new MeterProvider({
         resource,
         readers: [
           new PeriodicExportingMetricReader({
             exporter: exporterForReader,
-            exportIntervalMillis: 10000, // Export every 10 seconds
-            exportTimeoutMillis: this.config.timeout || 30000,
+            exportIntervalMillis,
+            exportTimeoutMillis,
           }),
         ],
       });
@@ -488,9 +490,7 @@ export class OtelExporter extends BaseExporter {
 
       this.debugLog(`Metric export initialized (endpoint: ${metricEndpoint})`);
     } catch (error) {
-      this.logger.warn(
-        '[OtelExporter] Failed to initialize metric export. Required package: @opentelemetry/sdk-metrics',
-      );
+      this.logger.warn('[OtelExporter] Failed to initialize metric export');
       this.debugLog('Metric setup error:', error);
     }
   }
