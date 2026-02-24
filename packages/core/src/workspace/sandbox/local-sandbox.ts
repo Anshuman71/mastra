@@ -686,7 +686,14 @@ export class LocalSandbox extends MastraSandbox {
       try {
         const stats = await fs.lstat(hostPath);
         if (stats.isSymbolicLink() && newConfig.type === 'local') {
-          // Symlink exists — validate via marker file
+          // Validate symlink target matches config before checking marker
+          const linkTarget = await fs.readlink(hostPath).catch(() => null);
+          const resolvedTarget = linkTarget ? path.resolve(path.dirname(hostPath), linkTarget) : null;
+          const expectedTarget = path.resolve((newConfig as { type: 'local'; basePath: string }).basePath);
+          if (!resolvedTarget || resolvedTarget !== expectedTarget) {
+            return 'mismatched';
+          }
+          // Symlink target matches — validate via marker file
           const filename = this.mounts.markerFilename(hostPath);
           const markerPath = `/tmp/.mastra-mounts/${filename}`;
           const content = await fs.readFile(markerPath, 'utf-8');
