@@ -30,6 +30,7 @@
  * ```
  */
 
+import * as path from 'node:path';
 import type { IMastraLogger } from '../logger';
 import type { RequestContext } from '../request-context';
 import type { MastraVector } from '../vector';
@@ -837,15 +838,22 @@ export class Workspace<
     if (mountEntries && mountEntries.size > 0) {
       const sandboxAccessible: string[] = [];
       const workspaceOnly: string[] = [];
+      const workingDir = this._sandbox?.workingDirectory;
 
       for (const [mountPath, entry] of mountEntries) {
         const fsName = entry.filesystem.displayName || entry.filesystem.provider;
         const access = entry.filesystem.readOnly ? 'read-only' : 'read-write';
 
-        if (entry.state === 'mounted') {
-          sandboxAccessible.push(`  - ${mountPath}: ${fsName} (${access})`);
+        // Resolve mount path against workingDirectory when available
+        // so the LLM sees the actual usable path (e.g. /tmp/sandbox/s3 instead of /s3)
+        const displayPath = workingDir ? path.join(workingDir, mountPath.replace(/^\/+/, '')) : mountPath;
+
+        if (entry.state === 'mounted' || entry.state === 'pending' || entry.state === 'mounting') {
+          // mounted: ready now. pending/mounting: will be ready when sandbox starts
+          // (executeCommand triggers ensureRunning which processes pending mounts)
+          sandboxAccessible.push(`  - ${displayPath}: ${fsName} (${access})`);
         } else {
-          // pending, mounting, error, unsupported — NOT accessible in sandbox
+          // error, unsupported, unavailable — NOT accessible in sandbox
           workspaceOnly.push(`  - ${mountPath}: ${fsName} (${access})`);
         }
       }
