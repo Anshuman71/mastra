@@ -552,10 +552,18 @@ export class OtelExporter extends BaseExporter {
   // ===========================================================================
 
   async onLogEvent(event: LogEvent): Promise<void> {
-    if (this.isDisabled) return;
+    this.debugLog(`onLogEvent received (level: ${event.log.level}, message: "${event.log.message}")`);
+
+    if (this.isDisabled) {
+      this.debugLog('Log event skipped: exporter is disabled');
+      return;
+    }
 
     const ready = await this.setupLogExporter();
-    if (!ready || !this.otelLogger) return;
+    if (!ready || !this.otelLogger) {
+      this.debugLog('Log event skipped: log exporter not ready');
+      return;
+    }
 
     try {
       const logParams = convertLog(event.log);
@@ -588,10 +596,18 @@ export class OtelExporter extends BaseExporter {
   // ===========================================================================
 
   async onMetricEvent(event: MetricEvent): Promise<void> {
-    if (this.isDisabled) return;
+    this.debugLog(`onMetricEvent received (name: ${event.metric.name}, type: ${event.metric.metricType})`);
+
+    if (this.isDisabled) {
+      this.debugLog('Metric event skipped: exporter is disabled');
+      return;
+    }
 
     const ready = await this.setupMetricExporter();
-    if (!ready || !this.metricCache) return;
+    if (!ready || !this.metricCache) {
+      this.debugLog('Metric event skipped: metric exporter not ready');
+      return;
+    }
 
     try {
       this.metricCache.recordMetric(event.metric);
