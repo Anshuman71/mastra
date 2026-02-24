@@ -10,6 +10,7 @@ export const MAX_OUTPUT_CHARS = 30_000;
  * Based on the pattern from chalk/ansi-regex.
  */
 
+// biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI control chars are intentional
 const ANSI_RE =
   /(?:\u001B\][\s\S]*?(?:\u0007|\u001B\u005C|\u009C))|(?:[\u001B\u009B][\[\]()#;?]*(?:\d{1,4}(?:[;:]\d{0,4})*)?[\dA-PR-TZcf-nq-uy=><~])/g;
 
