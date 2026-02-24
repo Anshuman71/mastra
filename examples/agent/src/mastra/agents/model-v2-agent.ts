@@ -1,7 +1,5 @@
 import { Agent } from '@mastra/core/agent';
 import { openai } from '@ai-sdk/openai-v5';
-import { createTool } from '@mastra/core/tools';
-import { z } from 'zod';
 import { lessComplexWorkflow, myWorkflow } from '../workflows';
 import { Memory } from '@mastra/memory';
 import { ModerationProcessor } from '@mastra/core/processors';
@@ -25,28 +23,6 @@ const workspace = new Workspace({
     basePath: './workspace',
   }),
 });
-
-// export const weatherInfo = createTool({
-//   id: 'weather-info',
-//   description: 'Fetches the current weather information for a given city',
-//   suspendSchema: z.object({
-//     message: z.string(),
-//   }),
-//   inputSchema: z.object({
-//     city: z.string(),
-//   }),
-//   execute: async inputData => {
-//     return {
-//       city: inputData.city,
-//       weather: 'sunny',
-//       temperature_celsius: 19,
-//       temperature_fahrenheit: 66,
-//       humidity: 50,
-//       wind: '10 mph',
-//     };
-//   },
-//   // requireApproval: true,
-// });
 
 const memory = new Memory({
   options: {

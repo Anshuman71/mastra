@@ -2719,41 +2719,22 @@ export class Agent<
                       // Write data chunks directly to original stream to bubble up
                       await context.writer.custom(chunk as any);
                       if (chunk.type === 'data-tool-call-approval') {
-                        // return suspend?.(
-                        //   {},
-                        //   { requireToolApproval: true, runId: streamResult.runId, isAgentSuspend: true },
-                        // );
                         suspendedPayload = {};
                         requireToolApproval = true;
                       }
 
                       if (chunk.type === 'data-tool-call-suspended') {
-                        // return suspend?.(chunk.data.suspendPayload, {
-                        //   resumeSchema: chunk.data.resumeSchema,
-                        //   runId: streamResult.runId,
-                        //   isAgentSuspend: true,
-                        // });
-
                         suspendedPayload = chunk.data.suspendPayload;
                         resumeSchema = chunk.data.resumeSchema;
                       }
                     } else {
                       await context.writer.write(chunk);
                       if (chunk.type === 'tool-call-approval') {
-                        // return suspend?.(
-                        //   {},
-                        //   { requireToolApproval: true, runId: streamResult.runId, isAgentSuspend: true },
-                        // );
                         suspendedPayload = {};
                         requireToolApproval = true;
                       }
 
                       if (chunk.type === 'tool-call-suspended') {
-                        // return suspend?.(chunk.payload.suspendPayload, {
-                        //   resumeSchema: chunk.payload.resumeSchema,
-                        //   runId: streamResult.runId,
-                        //   isAgentSuspend: true,
-                        // });
                         suspendedPayload = chunk.payload.suspendPayload;
                         resumeSchema = chunk.payload.resumeSchema;
                       }

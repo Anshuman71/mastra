@@ -374,7 +374,7 @@ export function createToolCallStep<Tools extends ToolSet = ToolSet, OUTPUT = und
           // Pass all messages (input + response + memory) so sub-agents (agent-* tools) receive
           // the full conversation context and can make better decisions. Each sub-agent invocation
           // uses a fresh unique thread, so storing this context in that thread is scoped and safe.
-          messages: messageList.get.all.aiV5.model(),
+          messages: isAgentTool ? messageList.get.all.aiV5.model() : messageList.get.input.aiV5.model(),
           outputWriter,
           // Pass current step span as parent for tool call spans
           tracingContext: modelSpanTracker?.getTracingContext(),
@@ -528,7 +528,7 @@ export function createToolCallStep<Tools extends ToolSet = ToolSet, OUTPUT = und
           };
         }
 
-        if (inputData.toolName?.startsWith('agent-')) {
+        if (isAgentTool) {
           if (typeof args === 'object' && args !== null && 'prompt' in args) {
             args.threadId = args.threadId || _internal?.threadId;
             args.resourceId = args.resourceId || _internal?.resourceId;

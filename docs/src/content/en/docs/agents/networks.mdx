@@ -401,7 +401,7 @@ const taskCompleteScorer = createScorer({
   id: 'task-complete',
   name: 'Task Completeness',
 }).generateScore(async context => {
-  const text = context.currentText
+  const text = context.run.output
   return text.includes('recommendation') ? 1 : 0
 })
 

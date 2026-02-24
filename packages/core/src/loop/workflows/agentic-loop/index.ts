@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { StepResult, ToolSet } from '@internal/ai-sdk-v5';
 import type { MastraDBMessage } from '../../../memory';
 import { InternalSpans } from '../../../observability';
@@ -169,7 +170,7 @@ export function createAgenticLoopWorkflow<Tools extends ToolSet = ToolSet, OUTPU
             if (iterationResult.feedback && typedInputData.stepResult?.isContinued && !hasFinishedSteps) {
               messageList.add(
                 {
-                  id: rest.mastra?.generateId(),
+                  id: rest.mastra?.generateId() || randomUUID(),
                   createdAt: new Date(),
                   type: 'text',
                   role: 'assistant',

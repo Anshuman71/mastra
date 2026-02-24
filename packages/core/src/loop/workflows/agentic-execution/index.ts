@@ -108,7 +108,6 @@ export function createAgenticExecutionWorkflow<Tools extends ToolSet = ToolSet, 
     .map(
       async ({ inputData }) => {
         const typedInputData = inputData as LLMIterationData<Tools, OUTPUT>;
-        console.dir({ typedInputData }, { depth: null });
         // Add assistant response messages to messageList BEFORE processing tool calls
         // This ensures messages are available for persistence before suspension.
         // IMPORTANT: only add messages beyond existingResponseModelCount to avoid
@@ -126,7 +125,6 @@ export function createAgenticExecutionWorkflow<Tools extends ToolSet = ToolSet, 
     .map(
       async ({ inputData }) => {
         const typedInputData = inputData as LLMIterationData<Tools, OUTPUT>;
-        console.dir({ toolCalls: typedInputData.output.toolCalls }, { depth: null });
         return typedInputData.output.toolCalls || [];
       },
       { id: 'map-tool-calls' },
