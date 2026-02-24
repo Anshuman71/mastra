@@ -93,11 +93,12 @@ export const LIST_MCP_SERVERS_ROUTE = createRoute({
     // (hydration is lazy, triggered by getById). We need the stored IDs to:
     // 1. Correctly tag already-hydrated servers that appear in listMCPServers()
     // 2. Add non-hydrated stored servers that aren't in listMCPServers() yet
+    // We use status: 'draft' to always show the latest version (not active) for stored servers.
     let storedServerIds = new Set<string>();
     let storedServersMap = new Map<string, { id: string; name: string; version?: string; createdAt?: string | Date }>();
     try {
       const editor = mastra.getEditor();
-      const storedResult = await editor?.mcpServer.listResolved();
+      const storedResult = await editor?.mcpServer.listResolved({ status: 'draft' });
       if (storedResult?.mcpServers) {
         for (const s of storedResult.mcpServers) {
           storedServerIds.add(s.id);
@@ -109,10 +110,24 @@ export const LIST_MCP_SERVERS_ROUTE = createRoute({
     }
 
     // Get server info, tagging already-hydrated stored servers correctly
-    const serverInfoList: ServerInfo[] = paginatedServers.map(server => ({
-      ...server.getServerInfo(),
-      source: storedServerIds.has(server.id) ? ('stored' as const) : ('code' as const),
-    }));
+    const serverInfoList: ServerInfo[] = paginatedServers.map(server => {
+      const info = {
+        ...server.getServerInfo(),
+        source: storedServerIds.has(server.id) ? ('stored' as const) : ('code' as const),
+      };
+      // For stored servers, override with latest draft data from storage
+      // (the in-memory hydrated instance may be stale after edits)
+      const storedData = storedServersMap.get(server.id);
+      if (storedData) {
+        info.name = storedData.name;
+        info.version_detail = {
+          version: (storedData as any).version ?? '1.0.0',
+          release_date: storedData.createdAt ? new Date(storedData.createdAt).toISOString() : new Date().toISOString(),
+          is_latest: true,
+        };
+      }
+      return info;
+    });
 
     // Add stored servers that haven't been hydrated yet (not in listMCPServers)
     const existingIds = new Set(serverInfoList.map(s => s.id));
@@ -175,14 +190,17 @@ export const GET_MCP_SERVER_DETAIL_ROUTE = createRoute({
     // Determine source: stored servers are hydrated into the Mastra instance,
     // so we need to check the editor to know if this server is stored.
     let serverSource: 'code' | 'stored' = 'code';
+    let storedServer: MastraMCPServerImplementation | undefined;
     try {
-      const stored = await mastra.getEditor()?.mcpServer.getById(id);
-      if (stored) serverSource = 'stored';
+      storedServer = (await mastra.getEditor()?.mcpServer.getById(id)) ?? undefined;
+      if (storedServer) serverSource = 'stored';
     } catch {
       // editor not configured
     }
 
-    const serverDetail = server.getServerDetail();
+    // For stored servers, prefer the fresh instance from storage over the
+    // potentially stale in-memory Mastra instance
+    const serverDetail = (storedServer ?? server).getServerDetail();
 
     // If a specific version was requested, check if it matches
     if (version && serverDetail.version_detail.version !== version) {
