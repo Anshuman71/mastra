@@ -91,9 +91,33 @@ export const LIST_MCP_SERVERS_ROUTE = createRoute({
     // Get server info for each server
     const serverInfoList: ServerInfo[] = paginatedServers.map(server => server.getServerInfo());
 
+    // Merge stored (CMS-created) MCP servers
+    try {
+      const editor = mastra.getEditor();
+      const storedResult = await editor?.mcpServer.listResolved();
+      if (storedResult?.mcpServers) {
+        const existingIds = new Set(serverInfoList.map(s => s.id));
+        for (const stored of storedResult.mcpServers) {
+          if (!existingIds.has(stored.id)) {
+            serverInfoList.push({
+              id: stored.id,
+              name: stored.name,
+              version_detail: {
+                version: (stored as any).version ?? '1.0.0',
+                release_date: stored.createdAt ? new Date(stored.createdAt).toISOString() : new Date().toISOString(),
+                is_latest: true,
+              },
+            });
+          }
+        }
+      }
+    } catch {
+      // Silently ignore if editor/storage is not configured
+    }
+
     return {
       servers: serverInfoList,
-      total_count: totalCount,
+      total_count: serverInfoList.length,
       next: nextUrl,
     };
   },
