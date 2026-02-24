@@ -67,7 +67,7 @@ export function sanitizeV5UIMessages(
 
         // Filter out empty reasoning parts that would cause provider errors.
         //
-        // The Google provider (@ai-sdk/google, verified through v3.0.30) has a bug
+        // The Google provider (@ai-sdk/google, verified in v2.0.52 and known through at least v3.0.30) has a bug
         // where it drops reasoning parts when text.length === 0, even if the part
         // carries a thoughtSignature for prompt caching. When the reasoning part is
         // the only content in an assistant message, this produces an empty content
@@ -96,8 +96,7 @@ export function sanitizeV5UIMessages(
           // Strip if no metadata at all, or if metadata only contains Google keys
           // (which the upstream provider would discard anyway).
           const isGoogleOnlyOrNoMeta =
-            !meta ||
-            (typeof meta === 'object' && Object.keys(meta).every(k => k === 'google'));
+            !meta || (typeof meta === 'object' && Object.keys(meta).every(k => k === 'google'));
           if (isGoogleOnlyOrNoMeta) {
             return false;
           }

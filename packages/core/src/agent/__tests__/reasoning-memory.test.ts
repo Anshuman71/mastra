@@ -902,10 +902,10 @@ describe('Reasoning + Memory Integration', () => {
 describe('Reasoning Data Spy: Response vs Request Comparison (Issue #12980)', () => {
   /**
    * Gemini EMPTY reasoning with thoughtSignature (redacted thinking).
-   * Empty reasoning is NOT stored or sent, even when thoughtSignature is present.
-   * The upstream Google provider (@ai-sdk/google, through v3.0.30) drops reasoning
-   * when text.length === 0, discarding the thoughtSignature. Storing it would poison
-   * conversations because the provider produces empty content arrays that Gemini rejects.
+   * Empty reasoning IS stored in the DB to preserve the thoughtSignature for potential
+   * future use, but is NOT sent to the LLM. The upstream `@ai-sdk/google` provider
+   * produces empty content arrays from empty reasoning text, which Gemini rejects with
+   * "must include at least one parts field".
    */
   it('should handle Gemini empty reasoning with thoughtSignature through round-trip', async () => {
     const threadId = randomUUID();
