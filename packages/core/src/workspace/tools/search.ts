@@ -2,7 +2,6 @@ import { z } from 'zod';
 import { createTool } from '../../tools';
 import { WORKSPACE_TOOLS } from '../constants';
 import { emitWorkspaceMetadata, requireWorkspace } from './helpers';
-import { applyCharLimit } from './output-helpers';
 
 export const searchTool = createTool({
   id: WORKSPACE_TOOLS.SEARCH.SEARCH,
@@ -37,6 +36,6 @@ export const searchTool = createTool({
     lines.push('---');
     lines.push(`${results.length} result${results.length !== 1 ? 's' : ''} (${effectiveMode} search)`);
 
-    return applyCharLimit(lines.join('\n'));
+    return lines.join('\n');
   },
 });
