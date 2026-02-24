@@ -17,8 +17,13 @@ import { diag, DiagConsoleLogger, DiagLogLevel } from '@opentelemetry/api';
 
 import type { ExportResult } from '@opentelemetry/core';
 import { ExportResultCode } from '@opentelemetry/core';
-import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-base';
+
+import { resourceFromAttributes } from '@opentelemetry/resources';
+import { LoggerProvider, BatchLogRecordProcessor } from '@opentelemetry/sdk-logs';
+import { MeterProvider, PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
 import type { SpanExporter, ReadableSpan } from '@opentelemetry/sdk-trace-base';
+import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-base';
+import { ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions';
 
 import { loadExporter, loadSignalExporter } from './loadExporter.js';
 import { convertLog } from './log-converter.js';
@@ -142,11 +147,11 @@ export class OtelExporter extends BaseExporter {
   private exporter?: SpanExporter;
 
   // Log signal
-  private loggerProvider?: any; // LoggerProvider from @opentelemetry/sdk-logs
+  private loggerProvider?: LoggerProvider;
   private otelLogger?: any; // Logger from @opentelemetry/api-logs
 
   // Metric signal
-  private meterProvider?: any; // MeterProvider from @opentelemetry/sdk-metrics
+  private meterProvider?: MeterProvider;
   private metricCache?: MetricInstrumentCache;
 
   // Provider config (resolved once, shared across signals)
@@ -253,6 +258,26 @@ export class OtelExporter extends BaseExporter {
     return endpoint + signalPaths[signal];
   }
 
+  /**
+   * Build exporter constructor options for the given signal endpoint.
+   * For gRPC, converts headers to Metadata. For HTTP protocols, passes headers directly.
+   */
+  private async buildExporterOptions(
+    protocol: ExportProtocol,
+    url: string,
+    headers: Record<string, string>,
+  ): Promise<Record<string, unknown>> {
+    if (protocol === 'grpc') {
+      const grpcModule = await import('@grpc/grpc-js');
+      const metadata = new grpcModule.Metadata();
+      for (const [key, value] of Object.entries(headers)) {
+        metadata.set(key, value);
+      }
+      return { url, metadata, timeoutMillis: this.config.timeout };
+    }
+    return { url, headers, timeoutMillis: this.config.timeout };
+  }
+
   // ===========================================================================
   // Setup — eager, parallel initialization of all signals
   // ===========================================================================
@@ -329,26 +354,11 @@ export class OtelExporter extends BaseExporter {
           return;
         }
 
-        if (protocol === 'zipkin') {
-          this.exporter = new ExporterClass({ url: endpoint, headers });
-        } else if (protocol === 'grpc') {
-          const grpcModule = await import('@grpc/grpc-js');
-          const metadata = new grpcModule.Metadata();
-          Object.entries(headers).forEach(([key, value]) => {
-            metadata.set(key, value);
-          });
-          this.exporter = new ExporterClass({
-            url: endpoint,
-            metadata,
-            timeoutMillis: this.config.timeout,
-          });
-        } else {
-          this.exporter = new ExporterClass({
-            url: endpoint,
-            headers,
-            timeoutMillis: this.config.timeout,
-          });
-        }
+        const exporterOptions =
+          protocol === 'zipkin'
+            ? { url: endpoint, headers }
+            : await this.buildExporterOptions(protocol, endpoint, headers);
+        this.exporter = new ExporterClass(exporterOptions);
 
         this.debugLog(`Trace exporter created: ${this.exporter?.constructor?.name ?? 'unknown'} -> ${endpoint}`);
       }
@@ -395,26 +405,13 @@ export class OtelExporter extends BaseExporter {
         return;
       }
 
-      const sdkLogs = await import('@opentelemetry/sdk-logs');
-      const { resourceFromAttributes } = await import('@opentelemetry/resources');
-      const { ATTR_SERVICE_NAME } = await import('@opentelemetry/semantic-conventions');
-
       const logEndpoint = this.getSignalEndpoint(resolved, 'logs');
       const headers = resolved.headers;
 
       this.debugLog(`Setting up log exporter: protocol=${protocol}, endpoint=${logEndpoint}`);
 
-      let logExporter: any;
-      if (protocol === 'grpc') {
-        const grpcModule = await import('@grpc/grpc-js');
-        const metadata = new grpcModule.Metadata();
-        Object.entries(headers).forEach(([key, value]) => {
-          metadata.set(key, value);
-        });
-        logExporter = new LogExporterClass({ url: logEndpoint, metadata });
-      } else {
-        logExporter = new LogExporterClass({ url: logEndpoint, headers });
-      }
+      const logExporterOptions = await this.buildExporterOptions(protocol, logEndpoint, headers);
+      const logExporter = new LogExporterClass(logExporterOptions);
 
       const exporterForProcessor = this.isDebug
         ? new DebugLogExporterWrapper(logExporter, msg => this.debugLog(msg))
@@ -424,10 +421,10 @@ export class OtelExporter extends BaseExporter {
         [ATTR_SERVICE_NAME]: this.observabilityConfig?.serviceName || 'mastra-service',
       });
 
-      this.loggerProvider = new sdkLogs.LoggerProvider({
+      this.loggerProvider = new LoggerProvider({
         resource,
         processors: [
-          new sdkLogs.BatchLogRecordProcessor(exporterForProcessor, {
+          new BatchLogRecordProcessor(exporterForProcessor, {
             maxExportBatchSize: this.config.batchSize || 512,
             maxQueueSize: 2048,
             scheduledDelayMillis: 5000,
@@ -459,26 +456,13 @@ export class OtelExporter extends BaseExporter {
         return;
       }
 
-      const sdkMetrics = await import('@opentelemetry/sdk-metrics');
-      const { resourceFromAttributes } = await import('@opentelemetry/resources');
-      const { ATTR_SERVICE_NAME } = await import('@opentelemetry/semantic-conventions');
-
       const metricEndpoint = this.getSignalEndpoint(resolved, 'metrics');
       const headers = resolved.headers;
 
       this.debugLog(`Setting up metric exporter: protocol=${protocol}, endpoint=${metricEndpoint}`);
 
-      let metricExporter: any;
-      if (protocol === 'grpc') {
-        const grpcModule = await import('@grpc/grpc-js');
-        const metadata = new grpcModule.Metadata();
-        Object.entries(headers).forEach(([key, value]) => {
-          metadata.set(key, value);
-        });
-        metricExporter = new MetricExporterClass({ url: metricEndpoint, metadata });
-      } else {
-        metricExporter = new MetricExporterClass({ url: metricEndpoint, headers });
-      }
+      const metricExporterOptions = await this.buildExporterOptions(protocol, metricEndpoint, headers);
+      const metricExporter = new MetricExporterClass(metricExporterOptions);
 
       const exporterForReader = this.isDebug
         ? new DebugMetricExporterWrapper(metricExporter, msg => this.debugLog(msg))
@@ -488,10 +472,10 @@ export class OtelExporter extends BaseExporter {
         [ATTR_SERVICE_NAME]: this.observabilityConfig?.serviceName || 'mastra-service',
       });
 
-      this.meterProvider = new sdkMetrics.MeterProvider({
+      this.meterProvider = new MeterProvider({
         resource,
         readers: [
-          new sdkMetrics.PeriodicExportingMetricReader({
+          new PeriodicExportingMetricReader({
             exporter: exporterForReader,
             exportIntervalMillis: 10000, // Export every 10 seconds
             exportTimeoutMillis: this.config.timeout || 30000,
