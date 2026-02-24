@@ -408,7 +408,7 @@ export class LocalSandbox extends MastraSandbox {
       this.logger.debug(
         `[LocalSandbox] Detected existing mount for ${filesystem.provider} ("${filesystem.id}") at "${hostPath}" with correct config, skipping`,
       );
-      this.mounts.set(mountPath, { state: 'mounted', config });
+      this.mounts.set(mountPath, { filesystem, state: 'mounted', config });
       this._activeMountPaths.add(mountPath);
       return { success: true, mountPath };
     } else if (existingMount === 'mismatched') {
@@ -519,7 +519,7 @@ export class LocalSandbox extends MastraSandbox {
     }
 
     // Mark as mounted
-    this.mounts.set(mountPath, { state: 'mounted', config });
+    this.mounts.set(mountPath, { filesystem, state: 'mounted', config });
     this._activeMountPaths.add(mountPath);
 
     // Write marker file
