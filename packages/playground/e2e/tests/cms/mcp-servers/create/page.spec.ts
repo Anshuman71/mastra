@@ -133,3 +133,114 @@ test.describe('Error Handling', () => {
     await expect(page.locator('#mcp-server-name')).toBeVisible();
   });
 });
+
+/**
+ * FEATURE: Create → List → Detail Flow
+ * USER STORY: As a user, I want to create an MCP server and see it in the list and detail pages
+ * BEHAVIOR UNDER TEST: Created MCP servers persist and display correctly across views
+ */
+test.describe('Create → List → Detail Flow', () => {
+  test('created MCP server appears in list after creation', async ({ page }) => {
+    // ARRANGE & ACT: Create a server
+    await openCreateDialog(page);
+    const serverName = uniqueServerName('ListTest');
+    await fillMCPServerFields(page, { name: serverName, version: '1.0.0' });
+    await page.getByRole('button', { name: 'Create' }).click();
+
+    // Wait for success
+    await expect(page.getByText('MCP server created successfully')).toBeVisible({ timeout: 10000 });
+
+    // ASSERT: Server appears in the list
+    await page.goto('/mcps');
+    await expect(page.getByRole('link', { name: serverName })).toBeVisible({ timeout: 10000 });
+  });
+
+  test('created MCP server with tools shows correct tool count in list', async ({ page }) => {
+    // ARRANGE & ACT: Create a server with weatherInfo tool
+    await openCreateDialog(page);
+    const serverName = uniqueServerName('ToolCount');
+    await fillMCPServerFields(page, { name: serverName });
+
+    // Wait for tools to load and toggle weatherInfo
+    await expect(page.getByText('Available Tools')).toBeVisible({ timeout: 10000 });
+    const weatherSwitch = page
+      .locator('div:has(> [role="switch"])')
+      .filter({ hasText: 'weatherInfo' })
+      .getByRole('switch');
+    await weatherSwitch.click();
+
+    await page.getByRole('button', { name: 'Create' }).click();
+    await expect(page.getByText('MCP server created successfully')).toBeVisible({ timeout: 10000 });
+
+    // ASSERT: Navigate to list and verify tool count badge
+    await page.goto('/mcps');
+    await expect(page.getByRole('link', { name: serverName })).toBeVisible({ timeout: 10000 });
+
+    // Find the row with our server and check for tool badge
+    const serverRow = page.locator('tr').filter({ hasText: serverName });
+    await expect(serverRow.getByText(/1 tool/)).toBeVisible({ timeout: 10000 });
+  });
+
+  test('can navigate to created server detail page from list', async ({ page }) => {
+    // ARRANGE: Create a server
+    await openCreateDialog(page);
+    const serverName = uniqueServerName('NavDetail');
+    await fillMCPServerFields(page, { name: serverName, version: '2.5.0' });
+    await page.getByRole('button', { name: 'Create' }).click();
+    await expect(page.getByText('MCP server created successfully')).toBeVisible({ timeout: 10000 });
+
+    // ACT: Navigate to list and click on the server
+    await page.goto('/mcps');
+    await page.getByRole('link', { name: serverName }).click();
+
+    // ASSERT: Detail page shows correct name and version
+    await expect(page.locator('h1').filter({ hasText: serverName })).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('2.5.0')).toBeVisible({ timeout: 5000 });
+  });
+
+  test('detail page shows tools selected during creation', async ({ page }) => {
+    // ARRANGE & ACT: Create a server with weatherInfo tool selected
+    await openCreateDialog(page);
+    const serverName = uniqueServerName('ToolDetail');
+    await fillMCPServerFields(page, { name: serverName });
+
+    // Wait for tools to load and toggle weatherInfo
+    await expect(page.getByText('Available Tools')).toBeVisible({ timeout: 10000 });
+    const weatherSwitch = page
+      .locator('div:has(> [role="switch"])')
+      .filter({ hasText: 'weatherInfo' })
+      .getByRole('switch');
+    await weatherSwitch.click();
+
+    await page.getByRole('button', { name: 'Create' }).click();
+    await expect(page.getByText('MCP server created successfully')).toBeVisible({ timeout: 10000 });
+
+    // ASSERT: Navigate to detail and verify tool appears
+    await page.goto('/mcps');
+    await page.getByRole('link', { name: serverName }).click();
+
+    // Wait for detail page to load and check for tool in the Available Tools section
+    await expect(page.locator('h1').filter({ hasText: serverName })).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('Available Tools')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('weatherInfo')).toBeVisible({ timeout: 10000 });
+  });
+
+  test('created MCP server persists after page reload', async ({ page }) => {
+    // ARRANGE & ACT: Create a server
+    await openCreateDialog(page);
+    const serverName = uniqueServerName('Persist');
+    await fillMCPServerFields(page, { name: serverName, version: '1.0.0' });
+    await page.getByRole('button', { name: 'Create' }).click();
+    await expect(page.getByText('MCP server created successfully')).toBeVisible({ timeout: 10000 });
+
+    // Navigate to list first
+    await page.goto('/mcps');
+    await expect(page.getByRole('link', { name: serverName })).toBeVisible({ timeout: 10000 });
+
+    // ACT: Reload the page
+    await page.reload();
+
+    // ASSERT: Server still appears after reload
+    await expect(page.getByRole('link', { name: serverName })).toBeVisible({ timeout: 10000 });
+  });
+});

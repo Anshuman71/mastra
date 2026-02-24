@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, Page } from '@playwright/test';
 import { resetStorage } from '../../../__utils__/reset-storage';
 
 const PORT = process.env.E2E_PORT || '4111';
@@ -12,7 +12,7 @@ async function createMCPServerViaAPI(params: {
   name: string;
   version: string;
   tools?: Record<string, { description?: string }>;
-}) {
+}): Promise<{ id: string; name: string; version: string }> {
   const res = await fetch(`${BASE_URL}/api/stored/mcp-servers`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -24,6 +24,19 @@ async function createMCPServerViaAPI(params: {
   }
 
   return res.json();
+}
+
+async function navigateToServerDetail(page: Page, serverName: string) {
+  await page.goto('/mcps');
+  await page.getByRole('link', { name: serverName }).click();
+  await expect(page.locator('h1').filter({ hasText: serverName })).toBeVisible({ timeout: 10000 });
+}
+
+async function openEditDialog(page: Page) {
+  const editButton = page.getByRole('button', { name: 'Edit' });
+  await expect(editButton).toBeVisible({ timeout: 5000 });
+  await editButton.click();
+  await expect(page.getByRole('dialog')).toBeVisible({ timeout: 5000 });
 }
 
 test.afterEach(async () => {
@@ -153,5 +166,161 @@ test.describe('Delete', () => {
     // Verify it's gone
     const getRes = await fetch(`${BASE_URL}/api/stored/mcp-servers/${server.id}?status=draft`);
     expect(getRes.status).toBe(404);
+  });
+});
+
+/**
+ * FEATURE: Edit UI Flow
+ * USER STORY: As a user, I want to edit an MCP server from the detail page and see changes persist
+ * BEHAVIOR UNDER TEST: Edit dialog pre-populates with existing values and changes persist
+ */
+test.describe('Edit UI Flow', () => {
+  test('edit button opens dialog with pre-populated form', async ({ page }) => {
+    // ARRANGE: Create server via API
+    const serverName = uniqueServerName('EditPrepop');
+    await createMCPServerViaAPI({
+      name: serverName,
+      version: '3.0.0',
+    });
+
+    // ACT: Navigate to detail page and click edit
+    await navigateToServerDetail(page, serverName);
+    await openEditDialog(page);
+
+    // ASSERT: Form is pre-populated with correct values
+    await expect(page.locator('#mcp-server-name')).toHaveValue(serverName, { timeout: 5000 });
+    await expect(page.locator('#mcp-server-version')).toHaveValue('3.0.0', { timeout: 5000 });
+  });
+
+  test('edit dialog shows previously selected tools as enabled', async ({ page }) => {
+    // ARRANGE: Create server via API with weatherInfo tool
+    const serverName = uniqueServerName('EditTools');
+    await createMCPServerViaAPI({
+      name: serverName,
+      version: '1.0.0',
+      tools: { weatherInfo: { description: 'Get weather info' } },
+    });
+
+    // ACT: Navigate to detail page and click edit
+    await navigateToServerDetail(page, serverName);
+    await openEditDialog(page);
+
+    // ASSERT: Wait for tools to load in the dialog and verify weatherInfo switch is checked
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByRole('heading', { name: /Available Tools/ })).toBeVisible({ timeout: 10000 });
+    const weatherSwitch = dialog
+      .locator('div:has(> [role="switch"])')
+      .filter({ hasText: 'weatherInfo' })
+      .getByRole('switch');
+    await expect(weatherSwitch).toHaveAttribute('data-state', 'checked', { timeout: 5000 });
+  });
+
+  test('adding a tool via edit persists in draft', async ({ page }) => {
+    // ARRANGE: Create server via API with weatherInfo tool
+    const serverName = uniqueServerName('EditAdd');
+    await createMCPServerViaAPI({
+      name: serverName,
+      version: '1.0.0',
+      tools: { weatherInfo: { description: 'Get weather info' } },
+    });
+
+    // ACT: Navigate to detail page, click edit, toggle simpleMcpTool ON
+    await navigateToServerDetail(page, serverName);
+    await openEditDialog(page);
+
+    let dialog = page.getByRole('dialog');
+    await expect(dialog.getByRole('heading', { name: /Available Tools/ })).toBeVisible({ timeout: 10000 });
+    const simpleMcpSwitch = dialog
+      .locator('div:has(> [role="switch"])')
+      .filter({ hasText: 'simpleMcpTool' })
+      .getByRole('switch');
+    await simpleMcpSwitch.click();
+
+    await page.getByRole('button', { name: 'Update' }).click();
+    await expect(page.getByText('MCP server updated successfully')).toBeVisible({ timeout: 10000 });
+
+    // ASSERT: Reopen edit dialog and verify both tools are selected (draft shows edits)
+    await openEditDialog(page);
+    dialog = page.getByRole('dialog');
+    await expect(dialog.getByRole('heading', { name: /Available Tools/ })).toBeVisible({ timeout: 10000 });
+
+    const weatherSwitchAfter = dialog
+      .locator('div:has(> [role="switch"])')
+      .filter({ hasText: 'weatherInfo' })
+      .getByRole('switch');
+    const simpleSwitchAfter = dialog
+      .locator('div:has(> [role="switch"])')
+      .filter({ hasText: 'simpleMcpTool' })
+      .getByRole('switch');
+    await expect(weatherSwitchAfter).toHaveAttribute('data-state', 'checked', { timeout: 5000 });
+    await expect(simpleSwitchAfter).toHaveAttribute('data-state', 'checked', { timeout: 5000 });
+  });
+
+  test('removing a tool via edit persists in draft', async ({ page }) => {
+    // ARRANGE: Create server via API with two tools
+    const serverName = uniqueServerName('EditRemove');
+    await createMCPServerViaAPI({
+      name: serverName,
+      version: '1.0.0',
+      tools: {
+        weatherInfo: { description: 'Get weather info' },
+        simpleMcpTool: { description: 'Simple tool' },
+      },
+    });
+
+    // ACT: Navigate to detail page, click edit, toggle weatherInfo OFF
+    await navigateToServerDetail(page, serverName);
+    await openEditDialog(page);
+
+    let dialog = page.getByRole('dialog');
+    await expect(dialog.getByRole('heading', { name: /Available Tools/ })).toBeVisible({ timeout: 10000 });
+    const weatherSwitch = dialog
+      .locator('div:has(> [role="switch"])')
+      .filter({ hasText: 'weatherInfo' })
+      .getByRole('switch');
+    await weatherSwitch.click();
+
+    await page.getByRole('button', { name: 'Update' }).click();
+    await expect(page.getByText('MCP server updated successfully')).toBeVisible({ timeout: 10000 });
+
+    // ASSERT: Reopen edit dialog and verify only simpleMcpTool is selected
+    await openEditDialog(page);
+    dialog = page.getByRole('dialog');
+    await expect(dialog.getByRole('heading', { name: /Available Tools/ })).toBeVisible({ timeout: 10000 });
+
+    const weatherSwitchAfter = dialog
+      .locator('div:has(> [role="switch"])')
+      .filter({ hasText: 'weatherInfo' })
+      .getByRole('switch');
+    const simpleSwitchAfter = dialog
+      .locator('div:has(> [role="switch"])')
+      .filter({ hasText: 'simpleMcpTool' })
+      .getByRole('switch');
+    await expect(weatherSwitchAfter).toHaveAttribute('data-state', 'unchecked', { timeout: 5000 });
+    await expect(simpleSwitchAfter).toHaveAttribute('data-state', 'checked', { timeout: 5000 });
+  });
+
+  test('editing version persists in draft', async ({ page }) => {
+    // ARRANGE: Create server via API
+    const serverName = uniqueServerName('EditVer');
+    await createMCPServerViaAPI({
+      name: serverName,
+      version: '1.0.0',
+    });
+
+    // ACT: Navigate to detail page, click edit, change version
+    await navigateToServerDetail(page, serverName);
+    await openEditDialog(page);
+
+    const versionInput = page.locator('#mcp-server-version');
+    await versionInput.clear();
+    await versionInput.fill('2.0.0');
+
+    await page.getByRole('button', { name: 'Update' }).click();
+    await expect(page.getByText('MCP server updated successfully')).toBeVisible({ timeout: 10000 });
+
+    // ASSERT: Reopen edit dialog and verify version is updated in draft
+    await openEditDialog(page);
+    await expect(page.locator('#mcp-server-version')).toHaveValue('2.0.0', { timeout: 5000 });
   });
 });
