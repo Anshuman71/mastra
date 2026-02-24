@@ -945,8 +945,19 @@ export class LibSQLDB extends MastraBase {
 
           // SQLite doesn't support ADD COLUMN IF NOT EXISTS, but we checked above
           const alterSql = `ALTER TABLE ${parsedTableName} ADD COLUMN "${columnName}" ${sqlType} ${defaultValue}`;
-          await this.client.execute(alterSql);
-          this.logger.debug(`LibSQLDB: Added column ${columnName} to table ${tableName}`);
+          try {
+            await this.client.execute(alterSql);
+            this.logger.debug(`LibSQLDB: Added column ${columnName} to table ${tableName}`);
+          } catch (columnError: any) {
+            // Ignore "duplicate column" errors — the column may already exist due to
+            // WAL recovery or concurrent initialization not reflected in PRAGMA table_info
+            const message = columnError?.message || columnError?.cause?.message || '';
+            if (message.includes('duplicate column name')) {
+              this.logger.debug(`LibSQLDB: Column ${columnName} already exists in table ${tableName}, skipping`);
+            } else {
+              throw columnError;
+            }
+          }
         }
       }
     } catch (error) {

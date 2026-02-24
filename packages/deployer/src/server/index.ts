@@ -368,16 +368,18 @@ export async function createHonoServer(
       let indexHtml = await readFile(join(studioPath, 'index.html'), 'utf-8');
 
       // Inject the server configuration information
-      const port = serverOptions?.port ?? (Number(process.env.PORT) || 4111);
+      // MASTRA_SERVER_HOST/PORT/PROTOCOL env vars allow runners (e.g. Daytona) to override
+      // the externally-visible address when the server is behind a proxy
+      const port = process.env.MASTRA_SERVER_PORT ?? serverOptions?.port ?? (Number(process.env.PORT) || 4111);
       const hideCloudCta = process.env.MASTRA_HIDE_CLOUD_CTA === 'true';
-      const host = serverOptions?.host ?? 'localhost';
+      const host = process.env.MASTRA_SERVER_HOST ?? serverOptions?.host ?? 'localhost';
       const key =
         serverOptions?.https?.key ??
         (process.env.MASTRA_HTTPS_KEY ? Buffer.from(process.env.MASTRA_HTTPS_KEY, 'base64') : undefined);
       const cert =
         serverOptions?.https?.cert ??
         (process.env.MASTRA_HTTPS_CERT ? Buffer.from(process.env.MASTRA_HTTPS_CERT, 'base64') : undefined);
-      const protocol = key && cert ? 'https' : 'http';
+      const protocol = process.env.MASTRA_SERVER_PROTOCOL ?? (key && cert ? 'https' : 'http');
 
       const cloudApiEndpoint = process.env.MASTRA_CLOUD_API_ENDPOINT || '';
       const experimentalFeatures = process.env.EXPERIMENTAL_FEATURES === 'true' ? 'true' : 'false';
