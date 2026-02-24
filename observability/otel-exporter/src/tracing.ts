@@ -61,6 +61,78 @@ class DebugSpanExporterWrapper implements SpanExporter {
   }
 }
 
+/**
+ * Wrapper around a LogRecordExporter that logs export results when debug mode is enabled.
+ * Same pattern as DebugSpanExporterWrapper but for log records.
+ */
+class DebugLogExporterWrapper {
+  constructor(
+    private inner: any,
+    private debugLog: (msg: string) => void,
+  ) {}
+
+  export(logs: any[], resultCallback: (result: ExportResult) => void): void {
+    const count = logs.length;
+    this.inner.export(logs, (result: ExportResult) => {
+      if (result.code === ExportResultCode.SUCCESS) {
+        this.debugLog(`[OtelExporter] Log export completed: ${count} logs sent successfully`);
+      } else {
+        this.debugLog(`[OtelExporter] Log export FAILED: ${count} logs, error: ${result.error?.message ?? 'unknown'}`);
+      }
+      resultCallback(result);
+    });
+  }
+
+  async shutdown(): Promise<void> {
+    return this.inner.shutdown();
+  }
+
+  async forceFlush(): Promise<void> {
+    return this.inner.forceFlush?.();
+  }
+}
+
+/**
+ * Wrapper around a PushMetricExporter that logs export results when debug mode is enabled.
+ * Same pattern as DebugSpanExporterWrapper but for metrics.
+ */
+class DebugMetricExporterWrapper {
+  constructor(
+    private inner: any,
+    private debugLog: (msg: string) => void,
+  ) {}
+
+  export(metrics: any, resultCallback: (result: ExportResult) => void): void {
+    this.inner.export(metrics, (result: ExportResult) => {
+      const scopeCount = metrics?.scopeMetrics?.length ?? 0;
+      if (result.code === ExportResultCode.SUCCESS) {
+        this.debugLog(`[OtelExporter] Metric export completed: ${scopeCount} scope(s) sent successfully`);
+      } else {
+        this.debugLog(
+          `[OtelExporter] Metric export FAILED: ${scopeCount} scope(s), error: ${result.error?.message ?? 'unknown'}`,
+        );
+      }
+      resultCallback(result);
+    });
+  }
+
+  selectAggregationTemporality(instrumentType: any): any {
+    return this.inner.selectAggregationTemporality?.(instrumentType);
+  }
+
+  selectAggregation(instrumentType: any): any {
+    return this.inner.selectAggregation?.(instrumentType);
+  }
+
+  async shutdown(): Promise<void> {
+    return this.inner.shutdown();
+  }
+
+  async forceFlush(): Promise<void> {
+    return this.inner.forceFlush?.();
+  }
+}
+
 export class OtelExporter extends BaseExporter {
   private config: OtelExporterConfig;
   private observabilityConfig?: ObservabilityInstanceConfig;
@@ -365,6 +437,11 @@ export class OtelExporter extends BaseExporter {
         });
       }
 
+      // Wrap exporter with debug logging when enabled
+      const exporterForProcessor = this.isDebug
+        ? new DebugLogExporterWrapper(logExporter, msg => this.debugLog(msg))
+        : logExporter;
+
       // Create LoggerProvider with BatchLogRecordProcessor
       const resource = resourceFromAttributes({
         [ATTR_SERVICE_NAME]: this.observabilityConfig?.serviceName || 'mastra-service',
@@ -373,7 +450,7 @@ export class OtelExporter extends BaseExporter {
       this.loggerProvider = new sdkLogs.LoggerProvider({
         resource,
         processors: [
-          new sdkLogs.BatchLogRecordProcessor(logExporter, {
+          new sdkLogs.BatchLogRecordProcessor(exporterForProcessor, {
             maxExportBatchSize: this.config.batchSize || 512,
             maxQueueSize: 2048,
             scheduledDelayMillis: 5000,
@@ -464,6 +541,11 @@ export class OtelExporter extends BaseExporter {
         });
       }
 
+      // Wrap exporter with debug logging when enabled
+      const exporterForReader = this.isDebug
+        ? new DebugMetricExporterWrapper(metricExporter, msg => this.debugLog(msg))
+        : metricExporter;
+
       // Create MeterProvider with PeriodicExportingMetricReader
       const resource = resourceFromAttributes({
         [ATTR_SERVICE_NAME]: this.observabilityConfig?.serviceName || 'mastra-service',
@@ -473,7 +555,7 @@ export class OtelExporter extends BaseExporter {
         resource,
         readers: [
           new sdkMetrics.PeriodicExportingMetricReader({
-            exporter: metricExporter,
+            exporter: exporterForReader,
             exportIntervalMillis: 10000, // Export every 10 seconds
             exportTimeoutMillis: this.config.timeout || 30000,
           }),
