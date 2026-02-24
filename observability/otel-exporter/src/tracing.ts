@@ -146,12 +146,16 @@ export class OtelExporter extends BaseExporter {
   private otelLogger?: any; // Logger from @opentelemetry/api-logs
   private isLogSetup: boolean = false;
   private logSetupFailed: boolean = false;
+  private logSetupPromise?: Promise<boolean>; // Dedup concurrent setup calls
+  private logSetupFailureReason?: string;
 
   // Metric support
   private meterProvider?: any; // MeterProvider from @opentelemetry/sdk-metrics
   private metricCache?: MetricInstrumentCache;
   private isMetricSetup: boolean = false;
   private metricSetupFailed: boolean = false;
+  private metricSetupPromise?: Promise<boolean>; // Dedup concurrent setup calls
+  private metricSetupFailureReason?: string;
 
   // Resolved provider config (shared across signals)
   private resolvedConfig?: ResolvedProviderConfig | null;
@@ -375,13 +379,21 @@ export class OtelExporter extends BaseExporter {
   // Log setup
   // ===========================================================================
 
-  private async setupLogExporter(): Promise<boolean> {
-    if (this.isLogSetup) return !this.logSetupFailed;
-    if (this.logSetupFailed) return false;
+  private setupLogExporter(): Promise<boolean> {
+    if (this.isLogSetup) return Promise.resolve(!this.logSetupFailed);
 
+    // Deduplicate concurrent setup calls
+    if (this.logSetupPromise) return this.logSetupPromise;
+
+    this.logSetupPromise = this._doSetupLogExporter();
+    return this.logSetupPromise;
+  }
+
+  private async _doSetupLogExporter(): Promise<boolean> {
     // Check if logs are explicitly disabled
     if (this.config.signals?.logs === false) {
       this.debugLog('Log export disabled via config');
+      this.logSetupFailureReason = 'disabled via config (signals.logs === false)';
       this.isLogSetup = true;
       this.logSetupFailed = true;
       return false;
@@ -389,6 +401,8 @@ export class OtelExporter extends BaseExporter {
 
     const resolved = this.resolveProvider();
     if (!resolved) {
+      this.debugLog('Log setup failed: provider not resolved');
+      this.logSetupFailureReason = 'provider configuration not resolved';
       this.isLogSetup = true;
       this.logSetupFailed = true;
       return false;
@@ -398,6 +412,7 @@ export class OtelExporter extends BaseExporter {
     const LogExporterClass = await loadSignalExporter('logs', protocol, this.providerName);
     if (!LogExporterClass) {
       this.debugLog('Log exporter packages not available. Log export disabled.');
+      this.logSetupFailureReason = `log exporter package not installed for protocol "${protocol}"`;
       this.isLogSetup = true;
       this.logSetupFailed = true;
       return false;
@@ -426,6 +441,7 @@ export class OtelExporter extends BaseExporter {
           logExporter = new LogExporterClass({ url: logEndpoint, metadata });
         } catch {
           this.logger.warn('[OtelExporter] Failed to create gRPC log exporter. Log export disabled.');
+          this.logSetupFailureReason = 'failed to create gRPC log exporter (@grpc/grpc-js)';
           this.isLogSetup = true;
           this.logSetupFailed = true;
           return false;
@@ -469,6 +485,7 @@ export class OtelExporter extends BaseExporter {
         '[OtelExporter] Failed to initialize log export. Required packages: @opentelemetry/sdk-logs @opentelemetry/api-logs',
       );
       this.debugLog('Log setup error:', error);
+      this.logSetupFailureReason = `SDK initialization error: ${error instanceof Error ? error.message : String(error)}`;
       this.isLogSetup = true;
       this.logSetupFailed = true;
       return false;
@@ -479,13 +496,21 @@ export class OtelExporter extends BaseExporter {
   // Metric setup
   // ===========================================================================
 
-  private async setupMetricExporter(): Promise<boolean> {
-    if (this.isMetricSetup) return !this.metricSetupFailed;
-    if (this.metricSetupFailed) return false;
+  private setupMetricExporter(): Promise<boolean> {
+    if (this.isMetricSetup) return Promise.resolve(!this.metricSetupFailed);
 
+    // Deduplicate concurrent setup calls
+    if (this.metricSetupPromise) return this.metricSetupPromise;
+
+    this.metricSetupPromise = this._doSetupMetricExporter();
+    return this.metricSetupPromise;
+  }
+
+  private async _doSetupMetricExporter(): Promise<boolean> {
     // Check if metrics are explicitly disabled
     if (this.config.signals?.metrics === false) {
       this.debugLog('Metric export disabled via config');
+      this.metricSetupFailureReason = 'disabled via config (signals.metrics === false)';
       this.isMetricSetup = true;
       this.metricSetupFailed = true;
       return false;
@@ -493,6 +518,8 @@ export class OtelExporter extends BaseExporter {
 
     const resolved = this.resolveProvider();
     if (!resolved) {
+      this.debugLog('Metric setup failed: provider not resolved');
+      this.metricSetupFailureReason = 'provider configuration not resolved';
       this.isMetricSetup = true;
       this.metricSetupFailed = true;
       return false;
@@ -502,6 +529,7 @@ export class OtelExporter extends BaseExporter {
     const MetricExporterClass = await loadSignalExporter('metrics', protocol, this.providerName);
     if (!MetricExporterClass) {
       this.debugLog('Metric exporter packages not available. Metric export disabled.');
+      this.metricSetupFailureReason = `metric exporter package not installed for protocol "${protocol}"`;
       this.isMetricSetup = true;
       this.metricSetupFailed = true;
       return false;
@@ -530,6 +558,7 @@ export class OtelExporter extends BaseExporter {
           metricExporter = new MetricExporterClass({ url: metricEndpoint, metadata });
         } catch {
           this.logger.warn('[OtelExporter] Failed to create gRPC metric exporter. Metric export disabled.');
+          this.metricSetupFailureReason = 'failed to create gRPC metric exporter (@grpc/grpc-js)';
           this.isMetricSetup = true;
           this.metricSetupFailed = true;
           return false;
@@ -573,6 +602,7 @@ export class OtelExporter extends BaseExporter {
         '[OtelExporter] Failed to initialize metric export. Required package: @opentelemetry/sdk-metrics',
       );
       this.debugLog('Metric setup error:', error);
+      this.metricSetupFailureReason = `SDK initialization error: ${error instanceof Error ? error.message : String(error)}`;
       this.isMetricSetup = true;
       this.metricSetupFailed = true;
       return false;
@@ -643,7 +673,7 @@ export class OtelExporter extends BaseExporter {
 
     const ready = await this.setupLogExporter();
     if (!ready || !this.otelLogger) {
-      this.debugLog('Log event skipped: log exporter not ready');
+      this.debugLog(`Log event skipped: log exporter not ready (reason: ${this.logSetupFailureReason || 'unknown'})`);
       return;
     }
 
@@ -687,7 +717,9 @@ export class OtelExporter extends BaseExporter {
 
     const ready = await this.setupMetricExporter();
     if (!ready || !this.metricCache) {
-      this.debugLog('Metric event skipped: metric exporter not ready');
+      this.debugLog(
+        `Metric event skipped: metric exporter not ready (reason: ${this.metricSetupFailureReason || 'unknown'})`,
+      );
       return;
     }
 
