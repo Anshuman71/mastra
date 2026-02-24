@@ -42,6 +42,7 @@ import { MastraFilesystem } from './filesystem/mastra-filesystem';
 import { isGlobPattern, extractGlobBase, createGlobMatcher } from './glob';
 import { callLifecycle } from './lifecycle';
 import type { WorkspaceSandbox, OnMountHook } from './sandbox';
+import { LocalSandbox } from './sandbox/local-sandbox';
 import { MastraSandbox } from './sandbox/mastra-sandbox';
 import { SearchEngine } from './search';
 import type { BM25Config, Embedder, SearchOptions, SearchResult, IndexDocument } from './search';
@@ -838,7 +839,7 @@ export class Workspace<
     if (mountEntries && mountEntries.size > 0) {
       const sandboxAccessible: string[] = [];
       const workspaceOnly: string[] = [];
-      const workingDir = this._sandbox?.workingDirectory;
+      const workingDir = this._sandbox instanceof LocalSandbox ? this._sandbox.workingDirectory : undefined;
 
       for (const [mountPath, entry] of mountEntries) {
         const fsName = entry.filesystem.displayName || entry.filesystem.provider;
@@ -903,7 +904,7 @@ export class Workspace<
       sandbox: this._sandbox
         ? {
             provider: this._sandbox.provider,
-            workingDirectory: this._sandbox.workingDirectory,
+            workingDirectory: this._sandbox instanceof LocalSandbox ? this._sandbox.workingDirectory : undefined,
           }
         : undefined,
       instructions,
