@@ -2,8 +2,12 @@
 '@mastra/core': patch
 ---
 
-Fixed Gemini API errors that occurred when a conversation included empty reasoning parts (redacted thinking) in its history.
+Fixed provider API errors when conversations with reasoning models (OpenAI gpt-5.2, Gemini) were replayed from memory.
 
-**What changed:** Empty reasoning parts with no data or Google-only context are now filtered out before being sent to the LLM, preventing the "must include at least one parts field" error that would break entire conversation threads. Reasoning data is preserved in the database so no history is lost.
+**OpenAI:** Reasoning parts (`rs_*` items) and their linked `providerMetadata` on text parts (`msg_*` items) are now stripped before being sent to the LLM. OpenAI's Responses API enforces mandatory pairing between reasoning and message items — replaying them from history caused "Item of type 'reasoning' was provided without its required following item" and "Item of type 'message' was provided without its required 'reasoning' item" errors. Both reasoning parts and `providerMetadata.openai` on text parts are cleared so the SDK sends inline content instead of item references.
 
-**Provider compatibility:** Reasoning data required by other providers (Anthropic extended thinking, OpenAI reasoning items) is still sent as-is — only empty Google reasoning that would have been rejected is removed. Fixes #12980.
+**Gemini:** Empty reasoning parts (redacted thinking with no text) are filtered out to prevent the "must include at least one parts field" error from the Google provider.
+
+**Anthropic:** Redacted thinking data is preserved as-is for multi-turn thinking conversations.
+
+Reasoning data is preserved in the database in all cases — only stripped from LLM input. Fixes #12980.
