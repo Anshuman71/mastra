@@ -627,7 +627,8 @@ export class LocalSandbox extends MastraSandbox {
         if (killed) {
           resolve({ stdout, stderr: stderr + `\nProcess timed out after ${timeout}ms`, exitCode: 124 });
         } else if (signal) {
-          resolve({ stdout, stderr: stderr + `\nProcess terminated by ${signal}`, exitCode: 128 });
+          const signo = signal ? (os.constants.signals[signal as keyof typeof os.constants.signals] ?? 0) : 0;
+          resolve({ stdout, stderr: stderr + `\nProcess terminated by ${signal}`, exitCode: 128 + signo });
         } else {
           resolve({ stdout, stderr, exitCode: code ?? 0 });
         }
