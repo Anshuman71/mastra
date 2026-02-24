@@ -399,6 +399,46 @@ test.describe('Edit UI Flow', () => {
     await expect(sidebar.getByText('simpleMcpTool')).toBeVisible({ timeout: 10000 });
   });
 
+  test('adding one tool and removing another in a single edit updates the sidebar', async ({ page }) => {
+    // ARRANGE: Create server with weatherInfo tool
+    const serverName = uniqueServerName('SwapTools');
+    await createMCPServerViaAPI({
+      name: serverName,
+      version: '1.0.0',
+      tools: { weatherInfo: { description: 'Get weather info' } },
+    });
+
+    // Navigate to detail page and verify sidebar shows only weatherInfo
+    await navigateToServerDetail(page, serverName);
+    const sidebar = page.locator('.border-l').filter({ hasText: 'Available Tools' });
+    await expect(sidebar.getByText('weatherInfo')).toBeVisible({ timeout: 10000 });
+    await expect(sidebar.getByText('simpleMcpTool')).not.toBeVisible();
+
+    // ACT: Open edit dialog, toggle weatherInfo OFF + toggle simpleMcpTool ON, save
+    await openEditDialog(page);
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByRole('heading', { name: /Available Tools/ })).toBeVisible({ timeout: 10000 });
+
+    const weatherSwitch = dialog
+      .locator('div:has(> [role="switch"])')
+      .filter({ hasText: 'weatherInfo' })
+      .getByRole('switch');
+    const simpleMcpSwitch = dialog
+      .locator('div:has(> [role="switch"])')
+      .filter({ hasText: 'simpleMcpTool' })
+      .getByRole('switch');
+
+    await weatherSwitch.click(); // remove weatherInfo
+    await simpleMcpSwitch.click(); // add simpleMcpTool
+
+    await page.getByRole('button', { name: 'Update' }).click();
+    await expect(page.getByText('MCP server updated successfully')).toBeVisible({ timeout: 10000 });
+
+    // ASSERT: Sidebar shows only simpleMcpTool, weatherInfo is gone
+    await expect(sidebar.getByText('simpleMcpTool')).toBeVisible({ timeout: 10000 });
+    await expect(sidebar.getByText('weatherInfo')).not.toBeVisible();
+  });
+
   test('editing version persists in draft', async ({ page }) => {
     // ARRANGE: Create server via API
     const serverName = uniqueServerName('EditVer');

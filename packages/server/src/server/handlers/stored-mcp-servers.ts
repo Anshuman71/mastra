@@ -243,6 +243,12 @@ export const UPDATE_STORED_MCP_SERVER_ROUTE = createRoute({
         providedConfigFields,
       );
 
+      try {
+        mastra.getEditor()?.mcpServer.clearCache(storedMCPServerId);
+      } catch {
+        // editor not configured
+      }
+
       // Return the resolved MCP server with the latest (draft) version so the UI sees its edits
       const resolved = await mcpServerStore.getByIdResolved(storedMCPServerId, { status: 'draft' });
       if (!resolved) {
