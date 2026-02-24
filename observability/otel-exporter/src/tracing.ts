@@ -8,7 +8,6 @@ import type {
   TracingEvent,
   LogEvent,
   MetricEvent,
-  AnyExportedSpan,
   InitExporterOptions,
   ObservabilityInstanceConfig,
 } from '@mastra/core/observability';
@@ -27,7 +26,7 @@ import { MetricInstrumentCache } from './metric-converter.js';
 import { resolveProviderConfig } from './provider-configs.js';
 import type { ResolvedProviderConfig } from './provider-configs.js';
 import { SpanConverter } from './span-converter.js';
-import type { OtelExporterConfig } from './types.js';
+import type { ExportProtocol, OtelExporterConfig } from './types.js';
 
 /**
  * Wrapper around a SpanExporter that logs export results when debug mode is enabled.
@@ -136,30 +135,27 @@ class DebugMetricExporterWrapper {
 export class OtelExporter extends BaseExporter {
   private config: OtelExporterConfig;
   private observabilityConfig?: ObservabilityInstanceConfig;
+
+  // Trace signal
   private spanConverter?: SpanConverter;
   private processor?: BatchSpanProcessor;
   private exporter?: SpanExporter;
-  private isSetup: boolean = false;
 
-  // Log support
+  // Log signal
   private loggerProvider?: any; // LoggerProvider from @opentelemetry/sdk-logs
   private otelLogger?: any; // Logger from @opentelemetry/api-logs
-  private isLogSetup: boolean = false;
-  private logSetupFailed: boolean = false;
-  private logSetupPromise?: Promise<boolean>; // Dedup concurrent setup calls
-  private logSetupFailureReason?: string;
 
-  // Metric support
+  // Metric signal
   private meterProvider?: any; // MeterProvider from @opentelemetry/sdk-metrics
   private metricCache?: MetricInstrumentCache;
-  private isMetricSetup: boolean = false;
-  private metricSetupFailed: boolean = false;
-  private metricSetupPromise?: Promise<boolean>; // Dedup concurrent setup calls
-  private metricSetupFailureReason?: string;
 
-  // Resolved provider config (shared across signals)
+  // Provider config (resolved once, shared across signals)
   private resolvedConfig?: ResolvedProviderConfig | null;
   private providerName?: string;
+
+  // Single setup promise — all signals initialize together at init() time.
+  // Event handlers await this before processing. Never rejects.
+  private setupPromise?: Promise<void>;
 
   name = 'opentelemetry';
 
@@ -179,10 +175,15 @@ export class OtelExporter extends BaseExporter {
   }
 
   /**
-   * Initialize with tracing configuration
+   * Initialize with observability configuration and eagerly set up all signal
+   * exporters (traces, logs, metrics) in parallel.
+   *
+   * Called by Mastra during component registration. The async setup runs in the
+   * background — event handlers await the resulting promise before processing.
    */
   init(options: InitExporterOptions) {
     this.observabilityConfig = options.config;
+    this.setupPromise = this.setupAllSignals();
   }
 
   // ===========================================================================
@@ -253,173 +254,147 @@ export class OtelExporter extends BaseExporter {
   }
 
   // ===========================================================================
-  // Trace setup (existing)
+  // Setup — eager, parallel initialization of all signals
   // ===========================================================================
 
-  private async setupExporter() {
-    // already setup or exporter already set
-    if (this.isSetup || this.exporter) return;
-
-    const resolved = this.resolveProvider();
-    if (!resolved) {
-      this.isSetup = true;
-      return;
+  /**
+   * Wait for setup to complete. If init() was called, this awaits the
+   * already-in-flight setup promise. If init() was never called (standalone
+   * usage without Mastra), this triggers setup on first use.
+   */
+  private ensureSetup(): Promise<void> {
+    if (!this.setupPromise) {
+      this.setupPromise = this.setupAllSignals();
     }
-
-    // user provided an instantiated SpanExporter, use it
-    if (this.config.exporter) {
-      this.exporter = this.config.exporter;
-      return;
-    }
-
-    const endpoint = resolved.endpoint;
-    const headers = resolved.headers;
-    const protocol = resolved.protocol;
-
-    this.debugLog(`Setting up trace exporter: protocol=${protocol}, endpoint=${endpoint}`);
-
-    // Load and create the appropriate exporter based on protocol
-    const ExporterClass = await loadExporter(protocol, this.providerName);
-
-    if (!ExporterClass) {
-      // Exporter not available, disable tracing
-      this.setDisabled(`[OtelExporter] Exporter not available for protocol: ${protocol}`);
-      this.isSetup = true;
-      return;
-    }
-
-    try {
-      if (protocol === 'zipkin') {
-        this.exporter = new ExporterClass({
-          url: endpoint,
-          headers,
-        });
-      } else if (protocol === 'grpc') {
-        // gRPC uses Metadata object instead of headers
-        // Dynamically import @grpc/grpc-js to create metadata
-        let metadata: any;
-        try {
-          const grpcModule = await import('@grpc/grpc-js');
-          metadata = new grpcModule.Metadata();
-          Object.entries(headers).forEach(([key, value]) => {
-            metadata.set(key, value);
-          });
-        } catch (grpcError) {
-          this.setDisabled(
-            `[OtelExporter] Failed to load gRPC metadata. Install required packages:\n` +
-              `  npm install @opentelemetry/exporter-trace-otlp-grpc @grpc/grpc-js`,
-          );
-          this.logger.error('[OtelExporter] gRPC error details:', grpcError);
-          this.isSetup = true;
-          return;
-        }
-
-        this.exporter = new ExporterClass({
-          url: endpoint,
-          metadata,
-          timeoutMillis: this.config.timeout,
-        });
-      } else {
-        // HTTP/JSON and HTTP/Protobuf use headers
-        this.exporter = new ExporterClass({
-          url: endpoint,
-          headers,
-          timeoutMillis: this.config.timeout,
-        });
-      }
-    } catch (error) {
-      this.setDisabled('[OtelExporter] Failed to create exporter.');
-      this.logger.error('[OtelExporter] Exporter creation error details:', error);
-      this.isSetup = true;
-      return;
-    }
-
-    this.debugLog(`Trace exporter created: ${this.exporter?.constructor?.name ?? 'unknown'} -> ${endpoint}`);
+    return this.setupPromise;
   }
 
-  private async setupProcessor() {
-    if (this.processor || this.isSetup) return;
+  /**
+   * Resolve provider config once and set up all enabled signals in parallel.
+   * Each signal setup catches its own errors — this method never rejects.
+   */
+  private async setupAllSignals(): Promise<void> {
+    const resolved = this.resolveProvider();
+    if (!resolved) {
+      this.debugLog('Setup skipped: provider not resolved');
+      return;
+    }
 
-    const serviceName = this.observabilityConfig?.serviceName || 'mastra-service';
+    const protocol = resolved.protocol;
+    const setupTasks: Promise<void>[] = [];
 
-    this.spanConverter = new SpanConverter({
-      packageName: '@mastra/otel-exporter',
-      serviceName,
-      config: this.config,
-      format: 'GenAI_v1_38_0',
-    });
+    if (this.config.signals?.traces !== false) {
+      setupTasks.push(this.setupTraces(resolved, protocol));
+    } else {
+      this.debugLog('Trace export disabled via config');
+    }
 
-    // Wrap exporter with debug logging when enabled
-    const exporterForProcessor = this.isDebug
-      ? new DebugSpanExporterWrapper(this.exporter!, msg => this.debugLog(msg))
-      : this.exporter!;
+    if (this.config.signals?.logs !== false) {
+      setupTasks.push(this.setupLogs(resolved, protocol));
+    } else {
+      this.debugLog('Log export disabled via config');
+    }
 
-    // Always use BatchSpanProcessor for production
-    // It queues spans and exports them in batches for better performance
-    this.processor = new BatchSpanProcessor(exporterForProcessor, {
-      maxExportBatchSize: this.config.batchSize || 512, // Default batch size
-      maxQueueSize: 2048, // Maximum spans to queue
-      scheduledDelayMillis: 5000, // Export every 5 seconds
-      exportTimeoutMillis: this.config.timeout || 30000, // Export timeout
-    });
+    if (this.config.signals?.metrics !== false) {
+      setupTasks.push(this.setupMetrics(resolved, protocol));
+    } else {
+      this.debugLog('Metric export disabled via config');
+    }
+
+    await Promise.all(setupTasks);
 
     this.debugLog(
-      `BatchSpanProcessor ready (service.name: "${serviceName}", batch size: ${this.config.batchSize || 512}, delay: 5s)`,
+      `Setup complete [traces=${!!this.processor}, logs=${!!this.otelLogger}, metrics=${!!this.metricCache}]`,
     );
   }
 
-  private async setup() {
-    if (this.isSetup) return;
-    await this.setupExporter();
-    await this.setupProcessor();
-    this.isSetup = true;
-  }
+  // ---------------------------------------------------------------------------
+  // Trace setup
+  // ---------------------------------------------------------------------------
 
-  // ===========================================================================
-  // Log setup
-  // ===========================================================================
-
-  private setupLogExporter(): Promise<boolean> {
-    if (this.isLogSetup) return Promise.resolve(!this.logSetupFailed);
-
-    // Deduplicate concurrent setup calls
-    if (this.logSetupPromise) return this.logSetupPromise;
-
-    this.logSetupPromise = this._doSetupLogExporter();
-    return this.logSetupPromise;
-  }
-
-  private async _doSetupLogExporter(): Promise<boolean> {
-    // Check if logs are explicitly disabled
-    if (this.config.signals?.logs === false) {
-      this.debugLog('Log export disabled via config');
-      this.logSetupFailureReason = 'disabled via config (signals.logs === false)';
-      this.isLogSetup = true;
-      this.logSetupFailed = true;
-      return false;
-    }
-
-    const resolved = this.resolveProvider();
-    if (!resolved) {
-      this.debugLog('Log setup failed: provider not resolved');
-      this.logSetupFailureReason = 'provider configuration not resolved';
-      this.isLogSetup = true;
-      this.logSetupFailed = true;
-      return false;
-    }
-
-    const protocol = resolved.protocol;
-    const LogExporterClass = await loadSignalExporter('logs', protocol, this.providerName);
-    if (!LogExporterClass) {
-      this.debugLog('Log exporter packages not available. Log export disabled.');
-      this.logSetupFailureReason = `log exporter package not installed for protocol "${protocol}"`;
-      this.isLogSetup = true;
-      this.logSetupFailed = true;
-      return false;
-    }
-
+  private async setupTraces(resolved: ResolvedProviderConfig, protocol: ExportProtocol): Promise<void> {
     try {
-      // Dynamically import the SDK packages
+      // Create or use the provided SpanExporter
+      if (this.config.exporter) {
+        this.exporter = this.config.exporter;
+      } else {
+        const endpoint = resolved.endpoint;
+        const headers = resolved.headers;
+
+        this.debugLog(`Setting up trace exporter: protocol=${protocol}, endpoint=${endpoint}`);
+
+        const ExporterClass = await loadExporter(protocol, this.providerName);
+        if (!ExporterClass) {
+          this.debugLog(`Trace exporter not available for protocol: ${protocol}`);
+          return;
+        }
+
+        if (protocol === 'zipkin') {
+          this.exporter = new ExporterClass({ url: endpoint, headers });
+        } else if (protocol === 'grpc') {
+          const grpcModule = await import('@grpc/grpc-js');
+          const metadata = new grpcModule.Metadata();
+          Object.entries(headers).forEach(([key, value]) => {
+            metadata.set(key, value);
+          });
+          this.exporter = new ExporterClass({
+            url: endpoint,
+            metadata,
+            timeoutMillis: this.config.timeout,
+          });
+        } else {
+          this.exporter = new ExporterClass({
+            url: endpoint,
+            headers,
+            timeoutMillis: this.config.timeout,
+          });
+        }
+
+        this.debugLog(`Trace exporter created: ${this.exporter?.constructor?.name ?? 'unknown'} -> ${endpoint}`);
+      }
+
+      // Create processor
+      const serviceName = this.observabilityConfig?.serviceName || 'mastra-service';
+
+      this.spanConverter = new SpanConverter({
+        packageName: '@mastra/otel-exporter',
+        serviceName,
+        config: this.config,
+        format: 'GenAI_v1_38_0',
+      });
+
+      const exporterForProcessor = this.isDebug
+        ? new DebugSpanExporterWrapper(this.exporter!, msg => this.debugLog(msg))
+        : this.exporter!;
+
+      this.processor = new BatchSpanProcessor(exporterForProcessor, {
+        maxExportBatchSize: this.config.batchSize || 512,
+        maxQueueSize: 2048,
+        scheduledDelayMillis: 5000,
+        exportTimeoutMillis: this.config.timeout || 30000,
+      });
+
+      this.debugLog(
+        `Trace export initialized (service.name: "${serviceName}", batch size: ${this.config.batchSize || 512}, delay: 5s)`,
+      );
+    } catch (error) {
+      this.logger.warn('[OtelExporter] Failed to initialize trace export');
+      this.debugLog('Trace setup error:', error);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Log setup
+  // ---------------------------------------------------------------------------
+
+  private async setupLogs(resolved: ResolvedProviderConfig, protocol: ExportProtocol): Promise<void> {
+    try {
+      const LogExporterClass = await loadSignalExporter('logs', protocol, this.providerName);
+      if (!LogExporterClass) {
+        this.debugLog(`Log exporter package not available for protocol "${protocol}". Log export disabled.`);
+        return;
+      }
+
       const sdkLogs = await import('@opentelemetry/sdk-logs');
       const { resourceFromAttributes } = await import('@opentelemetry/resources');
       const { ATTR_SERVICE_NAME } = await import('@opentelemetry/semantic-conventions');
@@ -429,36 +404,22 @@ export class OtelExporter extends BaseExporter {
 
       this.debugLog(`Setting up log exporter: protocol=${protocol}, endpoint=${logEndpoint}`);
 
-      // Create the log exporter
       let logExporter: any;
       if (protocol === 'grpc') {
-        try {
-          const grpcModule = await import('@grpc/grpc-js');
-          const metadata = new grpcModule.Metadata();
-          Object.entries(headers).forEach(([key, value]) => {
-            metadata.set(key, value);
-          });
-          logExporter = new LogExporterClass({ url: logEndpoint, metadata });
-        } catch {
-          this.logger.warn('[OtelExporter] Failed to create gRPC log exporter. Log export disabled.');
-          this.logSetupFailureReason = 'failed to create gRPC log exporter (@grpc/grpc-js)';
-          this.isLogSetup = true;
-          this.logSetupFailed = true;
-          return false;
-        }
-      } else {
-        logExporter = new LogExporterClass({
-          url: logEndpoint,
-          headers,
+        const grpcModule = await import('@grpc/grpc-js');
+        const metadata = new grpcModule.Metadata();
+        Object.entries(headers).forEach(([key, value]) => {
+          metadata.set(key, value);
         });
+        logExporter = new LogExporterClass({ url: logEndpoint, metadata });
+      } else {
+        logExporter = new LogExporterClass({ url: logEndpoint, headers });
       }
 
-      // Wrap exporter with debug logging when enabled
       const exporterForProcessor = this.isDebug
         ? new DebugLogExporterWrapper(logExporter, msg => this.debugLog(msg))
         : logExporter;
 
-      // Create LoggerProvider with BatchLogRecordProcessor
       const resource = resourceFromAttributes({
         [ATTR_SERVICE_NAME]: this.observabilityConfig?.serviceName || 'mastra-service',
       });
@@ -478,65 +439,26 @@ export class OtelExporter extends BaseExporter {
       this.otelLogger = this.loggerProvider.getLogger('@mastra/otel-exporter');
 
       this.debugLog(`Log export initialized (endpoint: ${logEndpoint})`);
-      this.isLogSetup = true;
-      return true;
     } catch (error) {
       this.logger.warn(
         '[OtelExporter] Failed to initialize log export. Required packages: @opentelemetry/sdk-logs @opentelemetry/api-logs',
       );
       this.debugLog('Log setup error:', error);
-      this.logSetupFailureReason = `SDK initialization error: ${error instanceof Error ? error.message : String(error)}`;
-      this.isLogSetup = true;
-      this.logSetupFailed = true;
-      return false;
     }
   }
 
-  // ===========================================================================
+  // ---------------------------------------------------------------------------
   // Metric setup
-  // ===========================================================================
+  // ---------------------------------------------------------------------------
 
-  private setupMetricExporter(): Promise<boolean> {
-    if (this.isMetricSetup) return Promise.resolve(!this.metricSetupFailed);
-
-    // Deduplicate concurrent setup calls
-    if (this.metricSetupPromise) return this.metricSetupPromise;
-
-    this.metricSetupPromise = this._doSetupMetricExporter();
-    return this.metricSetupPromise;
-  }
-
-  private async _doSetupMetricExporter(): Promise<boolean> {
-    // Check if metrics are explicitly disabled
-    if (this.config.signals?.metrics === false) {
-      this.debugLog('Metric export disabled via config');
-      this.metricSetupFailureReason = 'disabled via config (signals.metrics === false)';
-      this.isMetricSetup = true;
-      this.metricSetupFailed = true;
-      return false;
-    }
-
-    const resolved = this.resolveProvider();
-    if (!resolved) {
-      this.debugLog('Metric setup failed: provider not resolved');
-      this.metricSetupFailureReason = 'provider configuration not resolved';
-      this.isMetricSetup = true;
-      this.metricSetupFailed = true;
-      return false;
-    }
-
-    const protocol = resolved.protocol;
-    const MetricExporterClass = await loadSignalExporter('metrics', protocol, this.providerName);
-    if (!MetricExporterClass) {
-      this.debugLog('Metric exporter packages not available. Metric export disabled.');
-      this.metricSetupFailureReason = `metric exporter package not installed for protocol "${protocol}"`;
-      this.isMetricSetup = true;
-      this.metricSetupFailed = true;
-      return false;
-    }
-
+  private async setupMetrics(resolved: ResolvedProviderConfig, protocol: ExportProtocol): Promise<void> {
     try {
-      // Dynamically import the SDK packages
+      const MetricExporterClass = await loadSignalExporter('metrics', protocol, this.providerName);
+      if (!MetricExporterClass) {
+        this.debugLog(`Metric exporter package not available for protocol "${protocol}". Metric export disabled.`);
+        return;
+      }
+
       const sdkMetrics = await import('@opentelemetry/sdk-metrics');
       const { resourceFromAttributes } = await import('@opentelemetry/resources');
       const { ATTR_SERVICE_NAME } = await import('@opentelemetry/semantic-conventions');
@@ -546,36 +468,22 @@ export class OtelExporter extends BaseExporter {
 
       this.debugLog(`Setting up metric exporter: protocol=${protocol}, endpoint=${metricEndpoint}`);
 
-      // Create the metric exporter
       let metricExporter: any;
       if (protocol === 'grpc') {
-        try {
-          const grpcModule = await import('@grpc/grpc-js');
-          const metadata = new grpcModule.Metadata();
-          Object.entries(headers).forEach(([key, value]) => {
-            metadata.set(key, value);
-          });
-          metricExporter = new MetricExporterClass({ url: metricEndpoint, metadata });
-        } catch {
-          this.logger.warn('[OtelExporter] Failed to create gRPC metric exporter. Metric export disabled.');
-          this.metricSetupFailureReason = 'failed to create gRPC metric exporter (@grpc/grpc-js)';
-          this.isMetricSetup = true;
-          this.metricSetupFailed = true;
-          return false;
-        }
-      } else {
-        metricExporter = new MetricExporterClass({
-          url: metricEndpoint,
-          headers,
+        const grpcModule = await import('@grpc/grpc-js');
+        const metadata = new grpcModule.Metadata();
+        Object.entries(headers).forEach(([key, value]) => {
+          metadata.set(key, value);
         });
+        metricExporter = new MetricExporterClass({ url: metricEndpoint, metadata });
+      } else {
+        metricExporter = new MetricExporterClass({ url: metricEndpoint, headers });
       }
 
-      // Wrap exporter with debug logging when enabled
       const exporterForReader = this.isDebug
         ? new DebugMetricExporterWrapper(metricExporter, msg => this.debugLog(msg))
         : metricExporter;
 
-      // Create MeterProvider with PeriodicExportingMetricReader
       const resource = resourceFromAttributes({
         [ATTR_SERVICE_NAME]: this.observabilityConfig?.serviceName || 'mastra-service',
       });
@@ -595,61 +503,31 @@ export class OtelExporter extends BaseExporter {
       this.metricCache = new MetricInstrumentCache(meter);
 
       this.debugLog(`Metric export initialized (endpoint: ${metricEndpoint})`);
-      this.isMetricSetup = true;
-      return true;
     } catch (error) {
       this.logger.warn(
         '[OtelExporter] Failed to initialize metric export. Required package: @opentelemetry/sdk-metrics',
       );
       this.debugLog('Metric setup error:', error);
-      this.metricSetupFailureReason = `SDK initialization error: ${error instanceof Error ? error.message : String(error)}`;
-      this.isMetricSetup = true;
-      this.metricSetupFailed = true;
-      return false;
     }
   }
 
   // ===========================================================================
-  // Trace event handler (existing)
+  // Trace event handler
   // ===========================================================================
 
   protected async _exportTracingEvent(event: TracingEvent): Promise<void> {
-    // Check if traces are explicitly disabled
-    if (this.config.signals?.traces === false) {
-      return;
-    }
+    if (this.config.signals?.traces === false) return;
+    if (event.type !== TracingEventType.SPAN_ENDED) return;
 
-    // Only process SPAN_ENDED events for OTEL
-    // OTEL expects complete spans with start and end times
-    if (event.type !== TracingEventType.SPAN_ENDED) {
-      return;
-    }
+    await this.ensureSetup();
+
+    if (this.isDisabled || !this.processor) return;
 
     const span = event.exportedSpan;
-    await this.exportSpan(span);
-  }
-
-  private async exportSpan(span: AnyExportedSpan): Promise<void> {
-    // Ensure exporter is set up
-    if (!this.isSetup) {
-      await this.setup();
-    }
-
-    // Skip if disabled
-    if (this.isDisabled || !this.processor) {
-      return;
-    }
 
     try {
-      // Convert the span to OTEL format
       const otelSpan = await this.spanConverter!.convertSpan(span);
-
-      // Export the span immediately through the processor
-      // The processor will handle batching if configured
-      await new Promise<void>(resolve => {
-        this.processor!.onEnd(otelSpan);
-        resolve();
-      });
+      this.processor.onEnd(otelSpan);
 
       this.debugLog(
         `Queued span ${span.id} (trace: ${span.traceId}, parent: ${span.parentSpanId || 'none'}, type: ${span.type})`,
@@ -660,20 +538,21 @@ export class OtelExporter extends BaseExporter {
   }
 
   // ===========================================================================
-  // Log event handler (new)
+  // Log event handler
   // ===========================================================================
 
   async onLogEvent(event: LogEvent): Promise<void> {
     this.debugLog(`onLogEvent received (level: ${event.log.level}, message: "${event.log.message}")`);
+
+    await this.ensureSetup();
 
     if (this.isDisabled) {
       this.debugLog('Log event skipped: exporter is disabled');
       return;
     }
 
-    const ready = await this.setupLogExporter();
-    if (!ready || !this.otelLogger) {
-      this.debugLog(`Log event skipped: log exporter not ready (reason: ${this.logSetupFailureReason || 'unknown'})`);
+    if (!this.otelLogger) {
+      this.debugLog('Log event skipped: log exporter not available');
       return;
     }
 
@@ -704,22 +583,21 @@ export class OtelExporter extends BaseExporter {
   }
 
   // ===========================================================================
-  // Metric event handler (new)
+  // Metric event handler
   // ===========================================================================
 
   async onMetricEvent(event: MetricEvent): Promise<void> {
     this.debugLog(`onMetricEvent received (name: ${event.metric.name}, type: ${event.metric.metricType})`);
+
+    await this.ensureSetup();
 
     if (this.isDisabled) {
       this.debugLog('Metric event skipped: exporter is disabled');
       return;
     }
 
-    const ready = await this.setupMetricExporter();
-    if (!ready || !this.metricCache) {
-      this.debugLog(
-        `Metric event skipped: metric exporter not ready (reason: ${this.metricSetupFailureReason || 'unknown'})`,
-      );
+    if (!this.metricCache) {
+      this.debugLog('Metric event skipped: metric exporter not available');
       return;
     }
 
