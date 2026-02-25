@@ -1,0 +1,51 @@
+import { X } from 'lucide-react';
+import { Badge } from '@/ds/components/Badge';
+import { IconButton } from '@/ds/components/IconButton';
+import { useProcessorGraphBuilderContext } from './processor-graph-builder-context';
+import type { ProcessorGraphStep, ProcessorPhase } from '../types';
+
+interface ProcessorStepCardProps {
+  layerId: string;
+  step: ProcessorGraphStep;
+  branchIndex?: number;
+  conditionIndex?: number;
+  stepIndex?: number;
+}
+
+export function ProcessorStepCard({ layerId, step, branchIndex, conditionIndex, stepIndex }: ProcessorStepCardProps) {
+  const { builder, providers, readOnly } = useProcessorGraphBuilderContext();
+  const provider = providers.find(p => p.id === step.providerId);
+
+  const handleRemove = () => {
+    if (conditionIndex !== undefined && stepIndex !== undefined) {
+      builder.removeStepFromCondition(layerId, conditionIndex, stepIndex);
+    } else if (branchIndex !== undefined && stepIndex !== undefined) {
+      builder.removeStepFromBranch(layerId, branchIndex, stepIndex);
+    } else {
+      builder.setStep(layerId, { id: step.id, providerId: '', config: {}, enabledPhases: [] });
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-2 rounded border border-border1 bg-surface3 p-2">
+      <div className="flex-1 min-w-0">
+        <p className="text-ui-sm text-neutral5 truncate">{provider?.name ?? step.providerId}</p>
+        {step.enabledPhases.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-1">
+            {step.enabledPhases.map((phase: ProcessorPhase) => (
+              <Badge key={phase}>{phase.replace('process', '').toLowerCase()}</Badge>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {!readOnly && (
+        <div className="flex items-center gap-1 shrink-0">
+          <IconButton variant="ghost" size="sm" tooltip="Remove" onClick={handleRemove}>
+            <X className="h-3.5 w-3.5" />
+          </IconButton>
+        </div>
+      )}
+    </div>
+  );
+}
