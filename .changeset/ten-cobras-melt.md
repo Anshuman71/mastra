@@ -4,6 +4,7 @@
 '@mastra/core': patch
 '@mastra/libsql': patch
 '@mastra/pg': patch
+'mastracode': patch
 ---
 
 Fixed two bugs in observational memory buffered activation:
@@ -13,3 +14,5 @@ Fixed two bugs in observational memory buffered activation:
 2. **Mid-step activation deferral**: Fixed `shouldTriggerAsyncObservation` to receive `totalPendingTokens` (total context tokens) instead of `unbufferedPendingTokens` for correct interval boundary comparison. The interval tracking compares current total tokens against `lastBufferedBoundary` (also set to total tokens), so passing unbuffered tokens broke the comparison and prevented mid-step activation when buffered chunks existed.
 
 3. **blockAfter parsing**: `blockAfter` values under 100 are now treated as multipliers of the threshold (e.g., 1.2 = 1.2x), while values >= 100 are treated as absolute token counts.
+
+4. **mastracode defaults**: Updated default OM settings in mastracode to use `bufferTokens: 1/5`, `bufferActivation: 2000`, and `blockAfter: 2` (multiplier).
