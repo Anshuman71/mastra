@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { DragDropContext } from '@hello-pangea/dnd';
 import { SideDialog } from '@/ds/components/SideDialog';
 import { Button } from '@/ds/components/Button';
@@ -33,6 +34,19 @@ export function ProcessorGraphDialog({
   const providers = providersData?.providers ?? [];
   const builder = useProcessorGraphBuilder(graph);
   const { onDragEnd } = useProcessorGraphDnd(builder, providers);
+
+  // Sync builder state when dialog opens (handles edit mode where graph prop updates after initial mount)
+  const wasOpen = useRef(false);
+  useEffect(() => {
+    if (isOpen && !wasOpen.current) {
+      if (graph) {
+        builder.loadGraph(graph);
+      } else {
+        builder.reset();
+      }
+    }
+    wasOpen.current = isOpen;
+  }, [isOpen, graph, builder.loadGraph, builder.reset]);
 
   const handleSave = () => {
     onGraphChange(builder.toGraph());
