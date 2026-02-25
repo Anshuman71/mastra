@@ -11,7 +11,7 @@ packages:
 
 :::warning[Supervisor Pattern Recommended]
 
-The supervisor pattern using `agent.stream()` or `agent.generate()` is now the recommended approach for coordinating multiple agents. It provides the same multi-agent coordination capabilities as `.network()` with significant improvements:
+The [supervisor pattern](./supervisor-agents) using `agent.stream()` or `agent.generate()` is now the recommended approach for coordinating multiple agents. It provides the same multi-agent coordination capabilities as `.network()` with significant improvements:
 
 - **Better control**: Iteration hooks, delegation hooks, and task completion scoring give you fine-grained control over execution
 - **Simpler API**: Uses familiar `stream()` and `generate()` methods instead of a separate `.network()` API
@@ -300,12 +300,6 @@ for await (const partial of stream.objectStream) {
 // Get the final typed result
 const final = await stream.object
 ```
-
-## Supervisor pattern
-
-The supervisor pattern using `.stream()` or `.generate()` is the recommended approach for multi-agent coordination. It provides delegation hooks, iteration monitoring, message filtering, and task completion scoring for fine-grained control over execution.
-
-See [Supervisor Agents](./supervisor-agents) for full documentation on delegation hooks, message filtering, iteration monitoring, and more.
 
 ## Related
 

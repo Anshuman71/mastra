@@ -374,7 +374,7 @@ For automatic tool resumption to work:
 
 Both approaches work with the same tool definitions. Automatic resumption triggers only when suspended tools exist in the message history and the user sends a new message on the same thread.
 
-## Tool approval in supervisor pattern
+## Tool approval: Supervisor pattern
 
 The [supervisor pattern](/docs/agents/networks) lets a supervisor agent coordinate multiple subagents using `.stream()` or `.generate()`. The supervisor delegates tasks to subagents, which may use tools that require approval. When this happens, tool approvals properly propagate through the delegation chain -- the approval request surfaces at the supervisor level where you can handle it, regardless of which subagent triggered it.
 
@@ -410,6 +410,7 @@ const findUserTool = createTool({
       email: z.string(),
     }),
   }),
+  // highlight-next-line
   requireApproval: true, // Requires approval before execution
   execute: async input => {
     const user = await database.findUser(input.userId)
@@ -439,15 +440,18 @@ const supervisorAgent = new Agent({
 const stream = await supervisorAgent.stream('Find user with ID 12345')
 
 for await (const chunk of stream.fullStream) {
+  // highlight-next-line
   if (chunk.type === 'tool-call-approval') {
     console.log('Tool requires approval:', chunk.payload.toolName)
     console.log('Arguments:', chunk.payload.args)
 
     // Approve the tool call
+    // highlight-start
     const resumeStream = await supervisorAgent.approveToolCall({
       runId: stream.runId,
       toolCallId: chunk.payload.toolCallId,
     })
+    //highlight-end
 
     // Process resumed stream
     for await (const resumeChunk of resumeStream.textStream) {
