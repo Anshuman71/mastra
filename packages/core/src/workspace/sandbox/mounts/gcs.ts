@@ -18,6 +18,7 @@
 
 import * as crypto from 'node:crypto';
 import * as fs from 'node:fs/promises';
+import * as os from 'node:os';
 import * as path from 'node:path';
 
 import type { FilesystemMountConfig } from '../../filesystem/mount';
@@ -67,7 +68,7 @@ export async function mountGCS(mountPath: string, config: LocalGCSMountConfig, c
 
   // Namespaced credentials file
   const credHash = crypto.createHash('sha256').update(mountPath).digest('hex').slice(0, 8);
-  const credDir = '/tmp/.mastra-mounts';
+  const credDir = path.join(os.tmpdir(), '.mastra-mounts');
   const keyPath = path.join(credDir, `.gcs-key-${credHash}.json`);
 
   try {

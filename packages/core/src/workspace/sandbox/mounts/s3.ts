@@ -16,6 +16,7 @@
 
 import * as crypto from 'node:crypto';
 import * as fs from 'node:fs/promises';
+import * as os from 'node:os';
 import * as path from 'node:path';
 
 import type { FilesystemMountConfig } from '../../filesystem/mount';
@@ -82,7 +83,7 @@ export async function mountS3(mountPath: string, config: LocalS3MountConfig, ctx
 
   // Namespaced credentials file
   const credHash = crypto.createHash('sha256').update(mountPath).digest('hex').slice(0, 8);
-  const credDir = '/tmp/.mastra-mounts';
+  const credDir = path.join(os.tmpdir(), '.mastra-mounts');
   const credPath = path.join(credDir, `.passwd-s3fs-${credHash}`);
 
   try {

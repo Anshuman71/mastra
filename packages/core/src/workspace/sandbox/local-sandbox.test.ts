@@ -7,7 +7,7 @@ import { createSandboxTestSuite } from '../../../../../workspaces/_test-utils/sr
 
 import { RequestContext } from '../../request-context';
 import { IsolationUnavailableError } from './errors';
-import { LocalSandbox } from './local-sandbox';
+import { LocalSandbox, MARKER_DIR } from './local-sandbox';
 import * as gcsMod from './mounts/gcs';
 import * as platformMod from './mounts/platform';
 import * as s3Mod from './mounts/s3';
@@ -818,7 +818,7 @@ describe('LocalSandbox', () => {
   // ===========================================================================
   // Mount Operations
   // ===========================================================================
-  describe('mount operations', () => {
+  describe.skipIf(os.platform() === 'win32')('mount operations', () => {
     let mountSandbox: LocalSandbox;
     let mountDir: string;
 
@@ -1076,9 +1076,8 @@ describe('LocalSandbox', () => {
       // Write a matching marker file using the resolved host path
       const markerFilename = mountSandbox.mounts.markerFilename(hostPath);
       const configHash = mountSandbox.mounts.computeConfigHash(config);
-      const markerDir = '/tmp/.mastra-mounts';
-      await fs.mkdir(markerDir, { recursive: true });
-      await fs.writeFile(path.join(markerDir, markerFilename), `${hostPath}|${configHash}`);
+      await fs.mkdir(MARKER_DIR, { recursive: true });
+      await fs.writeFile(path.join(MARKER_DIR, markerFilename), `${hostPath}|${configHash}`);
 
       try {
         const result = await mountSandbox.mount(makeMockFs({ getMountConfig: () => config }) as any, mountPath);
@@ -1086,7 +1085,7 @@ describe('LocalSandbox', () => {
         // Should NOT have called mountS3 since it was already mounted with matching config
         expect(mountS3Spy).not.toHaveBeenCalled();
       } finally {
-        await fs.unlink(path.join(markerDir, markerFilename)).catch(() => {});
+        await fs.unlink(path.join(MARKER_DIR, markerFilename)).catch(() => {});
       }
     });
 
@@ -1106,9 +1105,8 @@ describe('LocalSandbox', () => {
       // Write a matching marker file
       const markerFilename = mountSandbox.mounts.markerFilename(hostPath);
       const configHash = mountSandbox.mounts.computeConfigHash(config);
-      const markerDir = '/tmp/.mastra-mounts';
-      await fs.mkdir(markerDir, { recursive: true });
-      await fs.writeFile(path.join(markerDir, markerFilename), `${hostPath}|${configHash}`);
+      await fs.mkdir(MARKER_DIR, { recursive: true });
+      await fs.writeFile(path.join(MARKER_DIR, markerFilename), `${hostPath}|${configHash}`);
 
       try {
         const result = await mountSandbox.mount(
@@ -1124,7 +1122,7 @@ describe('LocalSandbox', () => {
         const target = await fs.readlink(hostPath);
         expect(target).toBe(basePath);
       } finally {
-        await fs.unlink(path.join(markerDir, markerFilename)).catch(() => {});
+        await fs.unlink(path.join(MARKER_DIR, markerFilename)).catch(() => {});
         await fs.unlink(hostPath).catch(() => {});
       }
     });
@@ -1197,9 +1195,8 @@ describe('LocalSandbox', () => {
       // Write a marker with the old config hash (simulating a previous mount)
       const markerFilename = mountSandbox.mounts.markerFilename(hostPath);
       const oldHash = mountSandbox.mounts.computeConfigHash(oldConfig);
-      const markerDir = '/tmp/.mastra-mounts';
-      await fs.mkdir(markerDir, { recursive: true });
-      await fs.writeFile(path.join(markerDir, markerFilename), `${hostPath}|${oldHash}`);
+      await fs.mkdir(MARKER_DIR, { recursive: true });
+      await fs.writeFile(path.join(MARKER_DIR, markerFilename), `${hostPath}|${oldHash}`);
 
       try {
         const result = await mountSandbox.mount(makeMockFs({ getMountConfig: () => newConfig }) as any, mountPath);
@@ -1207,7 +1204,7 @@ describe('LocalSandbox', () => {
         // Should have unmounted the old mount and re-mounted with new config
         expect(mountS3Spy).toHaveBeenCalledTimes(1);
       } finally {
-        await fs.unlink(path.join(markerDir, markerFilename)).catch(() => {});
+        await fs.unlink(path.join(MARKER_DIR, markerFilename)).catch(() => {});
       }
     });
 
@@ -1223,9 +1220,8 @@ describe('LocalSandbox', () => {
       // Write a stale marker (mount is gone but marker remains)
       const markerFilename = mountSandbox.mounts.markerFilename(hostPath);
       const configHash = mountSandbox.mounts.computeConfigHash(config);
-      const markerDir = '/tmp/.mastra-mounts';
-      await fs.mkdir(markerDir, { recursive: true });
-      await fs.writeFile(path.join(markerDir, markerFilename), `${hostPath}|${configHash}`);
+      await fs.mkdir(MARKER_DIR, { recursive: true });
+      await fs.writeFile(path.join(MARKER_DIR, markerFilename), `${hostPath}|${configHash}`);
 
       try {
         // Should proceed to mount normally since isMountPoint is false
@@ -1234,7 +1230,7 @@ describe('LocalSandbox', () => {
         expect(result.success).toBe(true);
         expect(mountS3Spy).toHaveBeenCalledTimes(1);
       } finally {
-        await fs.unlink(path.join(markerDir, markerFilename)).catch(() => {});
+        await fs.unlink(path.join(MARKER_DIR, markerFilename)).catch(() => {});
       }
     });
 
@@ -1300,7 +1296,7 @@ describe('LocalSandbox', () => {
 
       // Read and verify marker file
       const markerFilename = mountSandbox.mounts.markerFilename(hostPath);
-      const markerPath = `/tmp/.mastra-mounts/${markerFilename}`;
+      const markerPath = path.join(MARKER_DIR, markerFilename);
 
       try {
         const content = await fs.readFile(markerPath, 'utf-8');
@@ -1424,7 +1420,7 @@ describe('LocalSandbox', () => {
       await mountSandbox.mount(makeMockFs({ getMountConfig: () => config }) as any, mountPath);
 
       const markerFilename = mountSandbox.mounts.markerFilename(hostPath);
-      const markerPath = `/tmp/.mastra-mounts/${markerFilename}`;
+      const markerPath = path.join(MARKER_DIR, markerFilename);
 
       // Verify marker exists
       await expect(fs.access(markerPath)).resolves.not.toThrow();

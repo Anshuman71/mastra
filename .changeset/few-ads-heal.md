@@ -10,8 +10,6 @@
 - S3 mounts require `s3fs-fuse`; GCS mounts require `gcsfuse`. macOS also requires macFUSE.
 - If FUSE tools are missing, mounts are marked `unavailable` with install guidance — filesystem SDK methods still work.
 
-Related issues: COR-725, COR-729.
-
 ```typescript
 import { Workspace, LocalSandbox } from '@mastra/core/workspace';
 import { S3Filesystem } from '@mastra/s3';
