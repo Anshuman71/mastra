@@ -7,7 +7,7 @@ import { createSandboxTestSuite } from '../../../../../workspaces/_test-utils/sr
 
 import { RequestContext } from '../../request-context';
 import { IsolationUnavailableError } from './errors';
-import { LocalSandbox } from './local-sandbox';
+import { LocalSandbox, MARKER_DIR } from './local-sandbox';
 import { detectIsolation, isIsolationAvailable, isSeatbeltAvailable, isBwrapAvailable } from './native-sandbox';
 
 describe('LocalSandbox', () => {
@@ -814,7 +814,7 @@ describe('LocalSandbox', () => {
   // ===========================================================================
   // Mount Operations (symlink-only)
   // ===========================================================================
-  describe('mount operations', () => {
+  describe.skipIf(os.platform() === 'win32')('mount operations', () => {
     let mountSandbox: LocalSandbox;
     let mountDir: string;
 
@@ -969,9 +969,8 @@ describe('LocalSandbox', () => {
       // Write a matching marker file
       const markerFilename = mountSandbox.mounts.markerFilename(hostPath);
       const configHash = mountSandbox.mounts.computeConfigHash(config);
-      const markerDir = '/tmp/.mastra-mounts';
-      await fs.mkdir(markerDir, { recursive: true });
-      await fs.writeFile(path.join(markerDir, markerFilename), `${hostPath}|${configHash}`);
+      await fs.mkdir(MARKER_DIR, { recursive: true });
+      await fs.writeFile(path.join(MARKER_DIR, markerFilename), `${hostPath}|${configHash}`);
 
       try {
         const result = await mountSandbox.mount(makeMockLocalFs(basePath) as any, mountPath);
@@ -980,7 +979,7 @@ describe('LocalSandbox', () => {
         const target = await fs.readlink(hostPath);
         expect(target).toBe(basePath);
       } finally {
-        await fs.unlink(path.join(markerDir, markerFilename)).catch(() => {});
+        await fs.unlink(path.join(MARKER_DIR, markerFilename)).catch(() => {});
         await fs.unlink(hostPath).catch(() => {});
       }
     });
@@ -1039,7 +1038,7 @@ describe('LocalSandbox', () => {
 
       // Read and verify marker file
       const markerFilename = mountSandbox.mounts.markerFilename(hostPath);
-      const markerPath = `/tmp/.mastra-mounts/${markerFilename}`;
+      const markerPath = path.join(MARKER_DIR, markerFilename);
 
       try {
         const content = await fs.readFile(markerPath, 'utf-8');
@@ -1070,9 +1069,8 @@ describe('LocalSandbox', () => {
       await fs.symlink(oldBasePath, hostPath);
       const markerFilename = mountSandbox.mounts.markerFilename(hostPath);
       const oldHash = mountSandbox.mounts.computeConfigHash(oldConfig);
-      const markerDir = '/tmp/.mastra-mounts';
-      await fs.mkdir(markerDir, { recursive: true });
-      await fs.writeFile(path.join(markerDir, markerFilename), `${hostPath}|${oldHash}`);
+      await fs.mkdir(MARKER_DIR, { recursive: true });
+      await fs.writeFile(path.join(MARKER_DIR, markerFilename), `${hostPath}|${oldHash}`);
 
       try {
         const result = await mountSandbox.mount(makeMockLocalFs(newBasePath) as any, mountPath);
@@ -1086,7 +1084,7 @@ describe('LocalSandbox', () => {
         const content = await fs.readFile(path.join(hostPath, 'new.txt'), 'utf-8');
         expect(content).toBe('new content');
       } finally {
-        await fs.unlink(path.join(markerDir, markerFilename)).catch(() => {});
+        await fs.unlink(path.join(MARKER_DIR, markerFilename)).catch(() => {});
         await fs.unlink(hostPath).catch(() => {});
       }
     });
