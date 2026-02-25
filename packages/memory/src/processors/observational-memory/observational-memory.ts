@@ -879,13 +879,14 @@ export class ObservationalMemory implements Processor<'observational-memory'> {
     const maxOvershoot = retentionFloor * 0.95;
     const overshoot = bestOverTokens - targetMessageTokens;
     const remainingAfterOver = currentPendingTokens - bestOverTokens;
+    const remainingAfterUnder = currentPendingTokens - bestUnderTokens;
     const minRemaining = Math.min(1000, retentionFloor);
 
     let bestBoundaryMessageTokens: number;
 
     if (bestOverBoundary > 0 && overshoot <= maxOvershoot && remainingAfterOver >= minRemaining) {
       bestBoundaryMessageTokens = bestOverTokens;
-    } else if (bestUnderBoundary > 0) {
+    } else if (bestUnderBoundary > 0 && remainingAfterUnder >= minRemaining) {
       bestBoundaryMessageTokens = bestUnderTokens;
     } else if (bestOverBoundary > 0) {
       // All boundaries are over and exceed the safeguard — still activate
@@ -3040,6 +3041,7 @@ ${suggestedResponse}
     resourceId: string | undefined,
     state: Record<string, unknown>,
     observedMessageIds?: string[],
+    minRemaining?: number,
   ): Promise<void> {
     const allMsgs = messageList.get.all.db();
     let markerIdx = -1;
@@ -3106,16 +3108,28 @@ ${suggestedResponse}
       const observedSet = new Set(observedMessageIds);
       const messagesToSave: MastraDBMessage[] = [];
       const idsToRemove: string[] = [];
+      const totalTokens = typeof minRemaining === 'number' ? this.tokenCounter.countMessages(allMsgs) : undefined;
+      let removedTokens = 0;
+      let skipped = 0;
 
       for (const msg of allMsgs) {
         if (msg?.id && msg.id !== 'om-continuation' && observedSet.has(msg.id)) {
+          if (typeof minRemaining === 'number') {
+            const msgTokens = this.tokenCounter.countMessage(msg);
+            const remainingIfRemoved = (totalTokens ?? 0) - removedTokens - msgTokens;
+            if (remainingIfRemoved < minRemaining) {
+              skipped += 1;
+              continue;
+            }
+            removedTokens += msgTokens;
+          }
           messagesToSave.push(msg);
           idsToRemove.push(msg.id);
         }
       }
 
       omDebug(
-        `[OM:cleanupActivation] observedSet=${[...observedSet].map(id => id.slice(0, 8)).join(',')}, matched=${idsToRemove.length}, idsToRemove=${idsToRemove.map(id => id.slice(0, 8)).join(',')}`,
+        `[OM:cleanupActivation] observedSet=${[...observedSet].map(id => id.slice(0, 8)).join(',')}, matched=${idsToRemove.length}, skipped=${skipped}, idsToRemove=${idsToRemove.map(id => id.slice(0, 8)).join(',')}`,
       );
 
       // Remove activated messages from context. No need to re-save — these were
@@ -3639,10 +3653,22 @@ ${suggestedResponse}
             : Array.isArray(updatedRecord.observedMessageIds)
               ? updatedRecord.observedMessageIds
               : undefined;
+          const minRemaining =
+            typeof this.observationConfig.bufferActivation === 'number'
+              ? Math.min(1000, this.resolveRetentionFloor(this.observationConfig.bufferActivation, threshold))
+              : undefined;
           omDebug(
-            `[OM:cleanup] observedIds=${observedIds?.length ?? 'undefined'}, ids=${observedIds?.join(',') ?? 'none'}, updatedRecord.observedMessageIds=${JSON.stringify(updatedRecord.observedMessageIds)}`,
+            `[OM:cleanup] observedIds=${observedIds?.length ?? 'undefined'}, ids=${observedIds?.join(',') ?? 'none'}, updatedRecord.observedMessageIds=${JSON.stringify(updatedRecord.observedMessageIds)}, minRemaining=${minRemaining ?? 'n/a'}`,
           );
-          await this.cleanupAfterObservation(messageList, sealedIds, threadId, resourceId, state, observedIds);
+          await this.cleanupAfterObservation(
+            messageList,
+            sealedIds,
+            threadId,
+            resourceId,
+            state,
+            observedIds,
+            minRemaining,
+          );
 
           // Clean up sealed IDs for activated messages (prevents memory leak)
           if (activatedMessageIds?.length) {
@@ -4516,7 +4542,7 @@ ${formattedMessages}
 
     try {
       omDebug(
-        `[OM:bufferInput] cycleId=${cycleId}, msgCount=${messagesToBuffer.length}, msgTokens=${this.tokenCounter.countMessages(messagesToBuffer)}, ids=${messagesToBuffer.map(m => `${m.id?.slice(0, 8)}@${m.createdAt ? new Date(m.createdAt).toISOString() : 'none'}`).join(',')}`,
+        `[OM:bufferInput] cycleId=${cycleId}, msgCount=${messagesToBuffer.length}, msgTokens=${tokensToBuffer}, ids=${messagesToBuffer.map(m => `${m.id?.slice(0, 8)}@${m.createdAt ? new Date(m.createdAt).toISOString() : 'none'}`).join(',')}`,
       );
       await this.doAsyncBufferedObservation(
         freshRecord,
@@ -4750,6 +4776,24 @@ ${formattedMessages}
     const forceMaxActivation = !!(
       this.observationConfig.blockAfter && effectivePendingTokens >= this.observationConfig.blockAfter
     );
+
+    const bufferTokens = this.observationConfig.bufferTokens ?? 0;
+    const retentionFloor = this.resolveRetentionFloor(bufferActivation, messageTokensThreshold);
+    const projectedMessageRemoval = this.calculateProjectedMessageRemoval(
+      freshChunks,
+      bufferActivation,
+      messageTokensThreshold,
+      effectivePendingTokens,
+    );
+    const projectedRemaining = Math.max(0, effectivePendingTokens - projectedMessageRemoval);
+    const maxRemaining = retentionFloor + bufferTokens;
+
+    if (!forceMaxActivation && bufferTokens > 0 && projectedRemaining > maxRemaining) {
+      omDebug(
+        `[OM:tryActivate] skipping activation: projectedRemaining=${projectedRemaining} > maxRemaining=${maxRemaining} (retentionFloor=${retentionFloor}, bufferTokens=${bufferTokens})`,
+      );
+      return { success: false };
+    }
 
     omDebug(
       `[OM:tryActivate] swapping: freshChunks=${freshChunks.length}, bufferActivation=${bufferActivation}, activationRatio=${activationRatio}, forceMax=${forceMaxActivation}, totalChunkTokens=${freshChunks.reduce((s, c) => s + (c.tokenCount ?? 0), 0)}`,

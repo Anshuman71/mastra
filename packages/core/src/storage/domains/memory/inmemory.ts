@@ -972,6 +972,7 @@ export class InMemoryMemory extends MemoryStorage {
     const maxOvershoot = retentionFloor * 0.95;
     const overshoot = bestOverTokens - targetMessageTokens;
     const remainingAfterOver = input.currentPendingTokens - bestOverTokens;
+    const remainingAfterUnder = input.currentPendingTokens - bestUnderTokens;
     const minRemaining = Math.min(1000, retentionFloor);
 
     let chunksToActivate: number;
@@ -979,7 +980,7 @@ export class InMemoryMemory extends MemoryStorage {
       chunksToActivate = bestOverBoundary;
     } else if (bestOverBoundary > 0 && overshoot <= maxOvershoot && remainingAfterOver >= minRemaining) {
       chunksToActivate = bestOverBoundary;
-    } else if (bestUnderBoundary > 0) {
+    } else if (bestUnderBoundary > 0 && remainingAfterUnder >= minRemaining) {
       chunksToActivate = bestUnderBoundary;
     } else if (bestOverBoundary > 0) {
       // All boundaries are over and exceed the safeguard — still activate

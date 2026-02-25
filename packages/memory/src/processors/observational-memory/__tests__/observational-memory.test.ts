@@ -5326,7 +5326,7 @@ describe('Async Buffering Processor Logic', () => {
         config: {},
       });
 
-      const result = await (om as any).tryActivateBufferedObservations(record, 'thread:thread-1');
+      const result = await (om as any).tryActivateBufferedObservations(record, 'thread:thread-1', 1000);
 
       expect(result.success).toBe(false);
     });
@@ -5358,19 +5358,85 @@ describe('Async Buffering Processor Logic', () => {
           observations: '- Important observation',
           tokenCount: 100,
           messageIds: ['msg-1', 'msg-2'],
-          messageTokens: 8000,
+          messageTokens: 45000,
           lastObservedAt: new Date('2026-02-05T10:00:00Z'),
           cycleId: 'cycle-1',
         },
       });
 
       const updatedRecord = await storage.getObservationalMemory('thread-1', 'resource-1');
-      const result = await (om as any).tryActivateBufferedObservations(updatedRecord!, 'thread:thread-1');
+      const result = await (om as any).tryActivateBufferedObservations(updatedRecord!, 'thread:thread-1', 50000);
 
       expect(result.success).toBe(true);
       expect(result.updatedRecord).toBeDefined();
       expect(result.updatedRecord.activeObservations).toContain('Important observation');
       expect(result.updatedRecord.bufferedObservationChunks).toBeUndefined();
+    });
+
+    it('should skip activation when projected remaining is far above retention floor', async () => {
+      const storage = createInMemoryStorage();
+      const om = new ObservationalMemory({
+        storage,
+        scope: 'thread',
+        model: new MockLanguageModelV2({ defaultObjectGenerationMode: 'json' }),
+        observation: {
+          messageTokens: 30000,
+          bufferTokens: 6000,
+          bufferActivation: 2000,
+        },
+        reflection: { observationTokens: 20000, bufferActivation: 0.5 },
+      });
+
+      const record = await storage.initializeObservationalMemory({
+        threadId: 'thread-1',
+        resourceId: 'resource-1',
+        scope: 'thread',
+        config: {},
+      });
+
+      await storage.updateBufferedObservations({
+        id: record.id,
+        chunk: {
+          observations: '- Chunk 1',
+          tokenCount: 50,
+          messageIds: ['msg-1'],
+          messageTokens: 3000,
+          lastObservedAt: new Date('2026-02-05T10:00:00Z'),
+          cycleId: 'cycle-1',
+        },
+      });
+
+      await storage.updateBufferedObservations({
+        id: record.id,
+        chunk: {
+          observations: '- Chunk 2',
+          tokenCount: 50,
+          messageIds: ['msg-2'],
+          messageTokens: 3000,
+          lastObservedAt: new Date('2026-02-05T10:01:00Z'),
+          cycleId: 'cycle-2',
+        },
+      });
+
+      await storage.updateBufferedObservations({
+        id: record.id,
+        chunk: {
+          observations: '- Chunk 3',
+          tokenCount: 50,
+          messageIds: ['msg-3'],
+          messageTokens: 3000,
+          lastObservedAt: new Date('2026-02-05T10:02:00Z'),
+          cycleId: 'cycle-3',
+        },
+      });
+
+      const updatedRecord = await storage.getObservationalMemory('thread-1', 'resource-1');
+      const result = await (om as any).tryActivateBufferedObservations(updatedRecord!, 'thread:thread-1', 30000);
+
+      expect(result.success).toBe(false);
+      const finalRecord = await storage.getObservationalMemory('thread-1', 'resource-1');
+      expect(finalRecord?.bufferedObservationChunks).toHaveLength(3);
+      expect(finalRecord?.activeObservations).toBeFalsy();
     });
 
     it('should not reset lastBufferedBoundary after activation (callers set it)', async () => {
@@ -5413,7 +5479,7 @@ describe('Async Buffering Processor Logic', () => {
       (ObservationalMemory as any).lastBufferedBoundary.set(bufferKey, 15000);
 
       const updatedRecord = await storage.getObservationalMemory('thread-1', 'resource-1');
-      await (om as any).tryActivateBufferedObservations(updatedRecord!, lockKey);
+      await (om as any).tryActivateBufferedObservations(updatedRecord!, lockKey, 50000);
 
       // After activation, the boundary should NOT be cleared by tryActivateBufferedObservations.
       // Callers are responsible for setting it to the post-activation context size.
@@ -7049,8 +7115,9 @@ describe('Full Async Buffering Flow', () => {
     const { storage, threadId, resourceId, step, waitForAsyncOps, observerCalls } = await setupAsyncBufferingScenario({
       messageTokens: 3000,
       bufferTokens: 500,
-      bufferActivation: 1.0,
+      bufferActivation: 2000,
       reflectionObservationTokens: 50000,
+      reflectionAsyncActivation: 0.5,
       messageCount: 10, // ~2200 tokens, below 3000 threshold
     });
 
@@ -7133,8 +7200,9 @@ describe('Full Async Buffering Flow', () => {
     const { storage, threadId, resourceId, step, waitForAsyncOps } = await setupAsyncBufferingScenario({
       messageTokens: 3000,
       bufferTokens: 500,
-      bufferActivation: 1.0,
+      bufferActivation: 2000,
       reflectionObservationTokens: 50000,
+      reflectionAsyncActivation: 0.5,
       messageCount: 10, // ~2200 tokens, below 3000 threshold → triggers buffering
     });
 
@@ -7287,8 +7355,9 @@ describe('Full Async Buffering Flow', () => {
     const { storage, threadId, resourceId, step, waitForAsyncOps, observerCalls } = await setupAsyncBufferingScenario({
       messageTokens: 3000,
       bufferTokens: 500,
-      bufferActivation: 1.0,
+      bufferActivation: 2000,
       reflectionObservationTokens: 50000,
+      reflectionAsyncActivation: 0.5,
       messageCount: 10, // ~2200 tokens, below 3000 threshold → buffers first
     });
 
@@ -7482,8 +7551,10 @@ describe('Full Async Buffering Flow', () => {
       await setupAsyncBufferingScenario({
         messageTokens: 2000,
         bufferTokens: 300,
-        bufferActivation: 1.0,
+        bufferActivation: 1500,
+        blockAfter: 1.1,
         reflectionObservationTokens: 50000,
+        reflectionAsyncActivation: 0.5,
         messageCount: 5, // ~1100 tokens, below 2000 threshold
       });
 
