@@ -12,8 +12,8 @@ import type { WorkspaceFilesystem } from '../filesystem/filesystem';
 import type { FilesystemMountConfig, MountResult } from '../filesystem/mount';
 
 import type { Workspace } from '../workspace';
+import { MountToolNotFoundError } from './mounts/types';
 import type { WorkspaceSandbox } from './sandbox';
-import { MountToolNotFoundError } from './types';
 import type { MountEntry, MountState } from './types';
 
 // Type-only import — erased at compile time, no circular dependency at runtime.
