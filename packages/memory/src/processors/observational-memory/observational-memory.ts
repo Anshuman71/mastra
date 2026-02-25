@@ -873,15 +873,17 @@ export class ObservationalMemory implements Processor<'observational-memory'> {
     // Safeguard: if the over boundary would eat into more than 95% of the
     // retention floor, fall back to the best under boundary instead.
     // This prevents edge cases where a large chunk overshoots dramatically.
-    // Additionally, never bias over if it would leave fewer than 1000 tokens
-    // remaining — at that level the agent may lose all meaningful context.
+    // Additionally, never bias over if it would leave fewer than the smaller of
+    // 1000 tokens or the retention floor — at that level the agent may lose
+    // all meaningful context.
     const maxOvershoot = retentionFloor * 0.95;
     const overshoot = bestOverTokens - targetMessageTokens;
     const remainingAfterOver = currentPendingTokens - bestOverTokens;
+    const minRemaining = Math.min(1000, retentionFloor);
 
     let bestBoundaryMessageTokens: number;
 
-    if (bestOverBoundary > 0 && overshoot <= maxOvershoot && (remainingAfterOver >= 1000 || retentionFloor === 0)) {
+    if (bestOverBoundary > 0 && overshoot <= maxOvershoot && remainingAfterOver >= minRemaining) {
       bestBoundaryMessageTokens = bestOverTokens;
     } else if (bestUnderBoundary > 0) {
       bestBoundaryMessageTokens = bestUnderTokens;
@@ -3547,7 +3549,8 @@ ${suggestedResponse}
       // Buffered messages are "unobserved" (not yet in activeObservations) but have already been
       // sent to the observer — counting them would cause redundant buffering ops, especially
       // after activation resets lastBufferedBoundary to 0.
-      const bufferedChunkTokens = this.getBufferedChunks(record).reduce((sum, c) => sum + (c.tokenCount ?? 0), 0);
+      // IMPORTANT: Use messageTokens (message tokens being removed), NOT tokenCount (observation tokens).
+      const bufferedChunkTokens = this.getBufferedChunks(record).reduce((sum, c) => sum + (c.messageTokens ?? 0), 0);
       const unbufferedPendingTokens = Math.max(0, totalPendingTokens - bufferedChunkTokens);
 
       // Merge per-state sealedIds with static sealedMessageIds (survives across OM instances)
@@ -3562,7 +3565,7 @@ ${suggestedResponse}
       // ════════════════════════════════════════════════════════════════════════
 
       if (this.isAsyncObservationEnabled() && totalPendingTokens < threshold) {
-        const shouldTrigger = this.shouldTriggerAsyncObservation(unbufferedPendingTokens, lockKey, record, threshold);
+        const shouldTrigger = this.shouldTriggerAsyncObservation(totalPendingTokens, lockKey, record, threshold);
         omDebug(
           `[OM:async-obs] belowThreshold: pending=${totalPendingTokens}, unbuffered=${unbufferedPendingTokens}, threshold=${threshold}, shouldTrigger=${shouldTrigger}, isBufferingObs=${record.isBufferingObservation}, lastBufferedAt=${record.lastBufferedAtTokens}`,
         );
@@ -3581,7 +3584,7 @@ ${suggestedResponse}
         // Above threshold but we still need to check async buffering:
         // - At step 0, sync observation won't run, so we need chunks ready
         // - Below blockAfter, sync observation won't run, so we need chunks ready
-        const shouldTrigger = this.shouldTriggerAsyncObservation(unbufferedPendingTokens, lockKey, record, threshold);
+        const shouldTrigger = this.shouldTriggerAsyncObservation(totalPendingTokens, lockKey, record, threshold);
         omDebug(
           `[OM:async-obs] atOrAboveThreshold: pending=${totalPendingTokens}, unbuffered=${unbufferedPendingTokens}, threshold=${threshold}, step=${stepNumber}, shouldTrigger=${shouldTrigger}`,
         );
@@ -4742,8 +4745,8 @@ ${formattedMessages}
     const bufferActivation = this.observationConfig.bufferActivation ?? 0.7;
     const activationRatio = this.resolveActivationRatio(bufferActivation, messageTokensThreshold);
 
-    // When above blockAfter, bypass the overshoot safeguard to aggressively reduce context.
-    // The system is about to do a synchronous observation anyway, so we should remove as much as possible.
+    // When above blockAfter, prefer the over boundary to reduce context, while still
+    // respecting the minimum remaining tokens safeguard.
     const forceMaxActivation = !!(
       this.observationConfig.blockAfter && effectivePendingTokens >= this.observationConfig.blockAfter
     );
