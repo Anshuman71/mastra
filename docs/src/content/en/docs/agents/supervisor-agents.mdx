@@ -24,23 +24,26 @@ Common use cases:
 
 Define subagents with clear descriptions, then create a supervisor agent that references them:
 
-```typescript {16-19} title="src/mastra/agents/supervisor.ts"
+```typescript title="src/mastra/agents/supervisor.ts"
 import { Agent } from '@mastra/core/agent'
 import { Memory } from '@mastra/memory'
 import { LibSQLStore } from '@mastra/libsql'
 
 const researchAgent = new Agent({
   id: 'research-agent',
+  // highlight-next-line
   description: 'Gathers factual information and returns bullet-point summaries.',
   model: 'openai/gpt-4o-mini',
 })
 
 const writingAgent = new Agent({
   id: 'writing-agent',
+  // highlight-next-line
   description: 'Transforms research into well-structured articles.',
   model: 'openai/gpt-4o-mini',
 })
 
+// highlight-start
 const supervisor = new Agent({
   id: 'supervisor',
   instructions: `You coordinate research and writing using specialized agents.
@@ -51,6 +54,7 @@ const supervisor = new Agent({
     storage: new LibSQLStore({ id: 'storage', url: 'file:mastra.db' }),
   }),
 })
+// highlight-end
 
 const stream = await supervisor.stream('Research AI in education and write an article', {
   maxSteps: 10,
