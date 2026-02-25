@@ -1419,7 +1419,7 @@ export class ObservationalMemory implements Processor<'observational-memory'> {
    * Resolve blockAfter config value.
    * Values between 1 and 2 (exclusive) are treated as multipliers of the threshold.
    * e.g. blockAfter: 1.5 with messageTokens: 20_000 → 30_000
-   * Values >= 2 are treated as absolute token counts.
+   * Values >= 100 are treated as absolute token counts.
    * Defaults to 1.2 (120% of threshold) when async buffering is enabled but blockAfter is omitted.
    */
   private resolveBlockAfter(
@@ -1429,8 +1429,8 @@ export class ObservationalMemory implements Processor<'observational-memory'> {
     if (blockAfter === undefined) return undefined;
     // Values between 1 (inclusive) and 2 (exclusive) are treated as multipliers of the threshold.
     // e.g. blockAfter: 1.5 means 1.5x the threshold. blockAfter: 1 means exactly at threshold.
-    // Values >= 2 are treated as absolute token counts.
-    if (blockAfter >= 1 && blockAfter < 2) {
+    // Values >= 100 are treated as absolute token counts.
+    if (blockAfter >= 1 && blockAfter < 100) {
       const threshold = typeof messageTokens === 'number' ? messageTokens : messageTokens.max;
       return Math.round(threshold * blockAfter);
     }
