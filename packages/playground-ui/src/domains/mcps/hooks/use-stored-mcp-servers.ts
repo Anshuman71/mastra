@@ -18,25 +18,16 @@ export const useStoredMCPServer = (serverId?: string, options?: { status?: 'draf
   });
 };
 
-export const useStoredMCPServers = () => {
-  const client = useMastraClient();
-
-  return useQuery({
-    queryKey: ['stored-mcp-servers'],
-    queryFn: () => client.listStoredMCPServers(),
-  });
-};
-
 export const useStoredMCPServerMutations = (serverId?: string) => {
   const client = useMastraClient();
   const queryClient = useQueryClient();
   const { requestContext } = usePlaygroundStore();
 
   const invalidateAll = () => {
-    queryClient.invalidateQueries({ queryKey: ['stored-mcp-servers'] });
     queryClient.invalidateQueries({ queryKey: ['mcp-servers'] });
     queryClient.invalidateQueries({ queryKey: ['workspaces'] });
     if (serverId) {
+      queryClient.invalidateQueries({ queryKey: ['mcp-server', serverId] });
       queryClient.invalidateQueries({ queryKey: ['stored-mcp-server', serverId] });
       queryClient.invalidateQueries({ queryKey: ['mcpserver-tools', serverId] });
     }
