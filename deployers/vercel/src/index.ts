@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
@@ -28,7 +28,21 @@ export class VercelDeployer extends Deployer {
       const __dirname = dirname(fileURLToPath(import.meta.url));
       const studioSource = join(dirname(__dirname), 'dist', 'studio');
       const staticDir = join(outputDirectory, '.vercel', 'output', 'static');
-      await copy(studioSource, staticDir, { overwrite: true });
+
+      if (!existsSync(studioSource)) {
+        throw new Error(
+          `Studio assets not found at "${studioSource}". Run the tsup build for @mastra/deployer-vercel before deploying with studio enabled.`,
+        );
+      }
+
+      try {
+        await copy(studioSource, staticDir, { overwrite: true });
+      } catch (err) {
+        throw new Error(
+          `Failed to copy studio assets from "${studioSource}" to "${staticDir}": ${err instanceof Error ? err.message : err}`,
+        );
+      }
+
       this.injectStudioConfig(staticDir);
     }
   }
