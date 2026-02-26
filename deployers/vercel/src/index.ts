@@ -1,25 +1,36 @@
-import { writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import process from 'node:process';
+import { fileURLToPath } from 'node:url';
 import { Deployer } from '@mastra/deployer';
-import { move } from 'fs-extra/esm';
+import { copy, move } from 'fs-extra/esm';
 import type { VcConfig, VcConfigOverrides, VercelDeployerOptions } from './types';
 
 export class VercelDeployer extends Deployer {
   private vcConfigOverrides: VcConfigOverrides = {};
+  private studio: boolean;
 
   constructor(options: VercelDeployerOptions = {}) {
     super({ name: 'VERCEL' });
     this.outputDir = join('.vercel', 'output', 'functions', 'index.func');
+    this.studio = options.studio ?? false;
 
-    // Store all overrides centrally
-    this.vcConfigOverrides = { ...options };
+    const { studio, ...overrides } = options;
+    this.vcConfigOverrides = { ...overrides };
   }
 
   async prepare(outputDirectory: string): Promise<void> {
     await super.prepare(outputDirectory);
 
     this.writeVercelJSON(join(outputDirectory, this.outputDir, '..', '..'));
+
+    if (this.studio) {
+      const __dirname = dirname(fileURLToPath(import.meta.url));
+      const studioSource = join(dirname(__dirname), 'dist', 'studio');
+      const staticDir = join(outputDirectory, '.vercel', 'output', 'static');
+      await copy(studioSource, staticDir, { overwrite: true });
+      this.injectStudioConfig(staticDir);
+    }
   }
 
   private getEntry(): string {
@@ -46,19 +57,41 @@ export const HEAD = handle(app);
 `;
   }
 
-  private writeVercelJSON(outputDirectory: string) {
-    writeFileSync(
-      join(outputDirectory, 'config.json'),
-      JSON.stringify({
-        version: 3,
-        routes: [
-          {
-            src: '/(.*)',
-            dest: '/',
-          },
-        ],
-      }),
+  private injectStudioConfig(staticDir: string) {
+    const indexPath = join(staticDir, 'index.html');
+    let html = readFileSync(indexPath, 'utf-8');
+
+    // Inject window.location values so the SPA constructs the correct same-origin endpoint.
+    // We use JS expressions (not string literals) for host/protocol so they resolve at runtime.
+    // Port uses a ternary: window.location.port is '' for default ports (80/443), and the SPA
+    // falls back to 4111 for empty strings, so we return the default port explicitly instead.
+    html = html.replace(`'%%MASTRA_SERVER_HOST%%'`, `window.location.hostname`);
+    html = html.replace(
+      `'%%MASTRA_SERVER_PORT%%'`,
+      `(window.location.port || (window.location.protocol === 'https:' ? '443' : '80'))`,
     );
+    html = html.replace(`'%%MASTRA_SERVER_PROTOCOL%%'`, `window.location.protocol.replace(':', '')`);
+    html = html.replace(`'%%MASTRA_API_PREFIX%%'`, `'/api'`);
+    html = html.replace(`'%%MASTRA_HIDE_CLOUD_CTA%%'`, `'true'`);
+    html = html.replace(`'%%MASTRA_CLOUD_API_ENDPOINT%%'`, `''`);
+    html = html.replace(`'%%MASTRA_EXPERIMENTAL_FEATURES%%'`, `'false'`);
+    html = html.replace(`'%%MASTRA_TELEMETRY_DISABLED%%'`, `''`);
+    html = html.replace(`'%%MASTRA_REQUEST_CONTEXT_PRESETS%%'`, `''`);
+    html = html.replaceAll('%%MASTRA_STUDIO_BASE_PATH%%', '');
+
+    writeFileSync(indexPath, html);
+  }
+
+  private writeVercelJSON(outputDirectory: string) {
+    const routes = this.studio
+      ? [
+          { src: '/api/(.*)', dest: '/' },
+          { handle: 'filesystem' as const },
+          { src: '/(.*)', dest: '/index.html', check: true },
+        ]
+      : [{ src: '/(.*)', dest: '/' }];
+
+    writeFileSync(join(outputDirectory, 'config.json'), JSON.stringify({ version: 3, routes }));
   }
 
   async bundle(
