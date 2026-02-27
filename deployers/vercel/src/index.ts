@@ -96,6 +96,7 @@ export const HEAD = handle(app);
     const routes = this.studio
       ? [
           { src: '/api/(.*)', dest: '/' },
+          { src: '/health', dest: '/' },
           { handle: 'filesystem' as const },
           { src: '/(.*)', dest: '/index.html', check: true },
         ]
