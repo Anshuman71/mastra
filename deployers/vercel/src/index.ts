@@ -26,7 +26,9 @@ export class VercelDeployer extends Deployer {
     this.writeVercelJSON(join(outputDirectory, this.outputDir, '..', '..'));
 
     if (this.studio) {
-      const __dirname = dirname(fileURLToPath(import.meta.url));
+      const __filename = fileURLToPath(import.meta.url);
+      const __dirname = dirname(__filename);
+
       const studioSource = join(dirname(__dirname), 'dist', 'studio');
       const staticDir = join(outputDirectory, '.vercel', 'output', 'static');
 
