@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { Deployer } from '@mastra/deployer';
+import { injectStudioHtmlConfig } from '@mastra/deployer/build';
 import { copy, move } from 'fs-extra/esm';
 import type { VcConfig, VcConfigOverrides, VercelDeployerOptions } from './types';
 
@@ -75,23 +76,22 @@ export const HEAD = handle(app);
     const indexPath = join(staticDir, 'index.html');
     let html = readFileSync(indexPath, 'utf-8');
 
-    // Inject window.location values so the SPA constructs the correct same-origin endpoint.
-    // We use JS expressions (not string literals) for host/protocol so they resolve at runtime.
-    // Port uses a ternary: window.location.port is '' for default ports (80/443), and the SPA
-    // falls back to 4111 for empty strings, so we return the default port explicitly instead.
-    html = html.replace(`'%%MASTRA_SERVER_HOST%%'`, `window.location.hostname`);
-    html = html.replace(
-      `'%%MASTRA_SERVER_PORT%%'`,
-      `(window.location.port || (window.location.protocol === 'https:' ? '443' : '80'))`,
-    );
-    html = html.replace(`'%%MASTRA_SERVER_PROTOCOL%%'`, `window.location.protocol.replace(':', '')`);
-    html = html.replace(`'%%MASTRA_API_PREFIX%%'`, `'/api'`);
-    html = html.replace(`'%%MASTRA_HIDE_CLOUD_CTA%%'`, `'true'`);
-    html = html.replace(`'%%MASTRA_CLOUD_API_ENDPOINT%%'`, `''`);
-    html = html.replace(`'%%MASTRA_EXPERIMENTAL_FEATURES%%'`, `'false'`);
-    html = html.replace(`'%%MASTRA_TELEMETRY_DISABLED%%'`, `''`);
-    html = html.replace(`'%%MASTRA_REQUEST_CONTEXT_PRESETS%%'`, `''`);
-    html = html.replaceAll('%%MASTRA_STUDIO_BASE_PATH%%', '');
+    /**
+     * Use window.location expressions so the SPA constructs the correct same-origin endpoint.
+     * Port uses a ternary: window.location.port is '' for default ports (80/443), and the SPA falls back to 4111 for empty strings, so we return the default port explicitly instead.
+     */
+    html = injectStudioHtmlConfig(html, {
+      host: `window.location.hostname`,
+      port: `(window.location.port || (window.location.protocol === 'https:' ? '443' : '80'))`,
+      protocol: `window.location.protocol.replace(':', '')`,
+      apiPrefix: `'/api'`,
+      basePath: '',
+      hideCloudCta: `'true'`,
+      cloudApiEndpoint: `''`,
+      experimentalFeatures: `'false'`,
+      telemetryDisabled: `''`,
+      requestContextPresets: `''`,
+    });
 
     writeFileSync(indexPath, html);
   }
